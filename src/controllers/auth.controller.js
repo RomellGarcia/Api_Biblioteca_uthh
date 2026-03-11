@@ -196,7 +196,7 @@ function getRoles(req, res) {
 }
 
 // POST /api/auth/usuarios/actualizar — actualizar usuario por admin
-const postActualizarUsuario = async (req, res) => {
+async function postActualizarUsuario(req, res) {
     const { tabla } = req.body;
     const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
 
