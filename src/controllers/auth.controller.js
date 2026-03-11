@@ -104,13 +104,13 @@ async function login(req, res) {
 }
 
 // GET /api/auth/verificar
+// GET /api/auth/verificar
 function verificar(req, res) {
-    if (!req.session.logueado || !req.session.usuario) {
+    if (!req.session || !req.session.logueado || !req.session.usuario) {
         return res.json({ success: false, logged_in: false });
     }
     res.json({ success: true, logged_in: true, usuario: req.session.usuario });
 }
-
 // POST /api/auth/logout
 function logout(req, res) {
     req.session.destroy((err) => {
