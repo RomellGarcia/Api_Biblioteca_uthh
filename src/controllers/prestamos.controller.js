@@ -1,295 +1,163 @@
-// prestamos.controller.js - Controlador de préstamos y devoluciones
-const PrestamoModel = require('../models/prestamo.model');
+const {
+    obtenerPrestamos,
+    buscarEjemplares,
+    buscarUsuarioConPrestamos,
+    generarTicket,
+    registrarPrestamo,
+    pagarSancion,
+    buscarPorTicket,
+    registrarDevolucion
+} = require('../models/prestamos.model');
 
-const PrestamosController = {
-    /**
-     * GET /api/prestamos
-     * Listar todos los préstamos con filtros
-     */
-    listarPrestamos: async (req, res) => {
-        try {
-            const { filtro = 'todos', busqueda = '' } = req.query;
+// GET /api/prestamos
+function getPrestamos(req, res) {
+    const { busqueda = '', filtro = 'todos' } = req.query;
 
-            const prestamos = await PrestamoModel.obtenerPrestamos(filtro, busqueda);
-            const estadisticas = await PrestamoModel.obtenerEstadisticas();
+    obtenerPrestamos(filtro, busqueda, (error, resultados) => {
+        if (error) return res.status(500).json({ success: false, error: error.message });
 
-            res.json({
-                success: true,
-                prestamos,
-                estadisticas
-            });
-        } catch (error) {
-            console.error('Error al obtener préstamos:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: 'Error al obtener préstamos'
-            });
-        }
-    },
+        const estadisticas = { total: resultados.length, activos: 0, devueltos: 0, vencidos: 0, proximos: 0, con_sancion_pendiente: 0 };
+        resultados.forEach(p => {
+            if (p.estado === 'devuelto') {
+                estadisticas.devueltos++;
+                if (p.flmontosancion > 0 && p.boolsancion == 0) estadisticas.con_sancion_pendiente++;
+            } else if (p.estado === 'vencido') estadisticas.vencidos++;
+            else if (p.estado === 'proximo') estadisticas.proximos++;
+            else estadisticas.activos++;
+        });
 
-    /**
-     * GET /api/prestamos/buscar-ejemplares
-     * Buscar ejemplares disponibles para préstamo
-     */
-    buscarEjemplares: async (req, res) => {
-        try {
-            const { termino } = req.query;
+        res.json({ success: true, data: { prestamos: resultados, estadisticas } });
+    });
+}
 
-            if (!termino || termino.trim() === '') {
-                return res.json({
-                    success: true,
-                    libros: []
-                });
+// GET /api/prestamos/buscar-ejemplares
+function getBuscarEjemplares(req, res) {
+    const { termino = '' } = req.query;
+    if (termino.length < 1) return res.json({ success: true, libros: [], total: 0 });
+
+    buscarEjemplares(termino, (error, ejemplares) => {
+        if (error) return res.status(500).json({ success: false, mensaje: 'Error al buscar ejemplares' });
+
+        const librosAgrupados = {};
+        ejemplares.forEach(ejemplar => {
+            const folio = ejemplar.vchfolio;
+            let imagenBase64 = null;
+            if (ejemplar.imagen) {
+                imagenBase64 = `data:image/webp;base64,${Buffer.from(ejemplar.imagen).toString('base64')}`;
             }
-
-            const libros = await PrestamoModel.buscarEjemplaresDisponibles(termino);
-
-            res.json({
-                success: true,
-                libros
-            });
-        } catch (error) {
-            console.error('Error al buscar ejemplares:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: 'Error al buscar ejemplares'
-            });
-        }
-    },
-
-    /**
-     * GET /api/prestamos/buscar-usuario
-     * Buscar usuario por matrícula
-     */
-    buscarUsuario: async (req, res) => {
-        try {
-            const { matricula } = req.query;
-
-            if (!matricula) {
-                return res.status(400).json({
-                    success: false,
-                    mensaje: 'Matrícula requerida'
-                });
+            if (!librosAgrupados[folio]) {
+                librosAgrupados[folio] = {
+                    vchfolio: folio,
+                    vchtitulo: ejemplar.vchtitulo,
+                    vchautor: ejemplar.vchautor,
+                    vcheditorial: ejemplar.vcheditorial,
+                    vchisbn: ejemplar.vchisbn,
+                    intanio: ejemplar.intanio,
+                    imagen: imagenBase64,
+                    vchcategoria: ejemplar.vchcategoria,
+                    ejemplares_disponibles: ejemplar.ejemplares_disponibles,
+                    ejemplares: []
+                };
             }
-
-            const usuarios = await PrestamoModel.buscarUsuarioPorMatricula(matricula);
-
-            if (usuarios.length === 0) {
-                return res.json({
-                    success: false,
-                    mensaje: 'Usuario no encontrado'
-                });
-            }
-
-            res.json({
-                success: true,
-                usuario: usuarios[0]
+            librosAgrupados[folio].ejemplares.push({
+                intidejemplar: ejemplar.intidejemplar,
+                vchcodigobarras: ejemplar.vchcodigobarras,
+                vchedicion: ejemplar.vchedicion,
+                vchubicacion: ejemplar.vchubicacion,
+                descripcion_ubicacion: ejemplar.descripcion_ubicacion,
+                vchestadolibro: ejemplar.vchestadolibro
             });
-        } catch (error) {
-            console.error('Error al buscar usuario:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: 'Error al buscar usuario'
-            });
-        }
-    },
+        });
 
-    /**
-     * GET /api/prestamos/generar-ticket
-     * Generar ticket único para préstamo
-     */
-    generarTicket: async (req, res) => {
-        try {
-            const ticket = await PrestamoModel.generarTicket();
+        res.json({ success: true, libros: Object.values(librosAgrupados), total: Object.keys(librosAgrupados).length });
+    });
+}
 
-            res.json({
-                success: true,
-                ticket
-            });
-        } catch (error) {
-            console.error('Error al generar ticket:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: 'Error al generar ticket'
-            });
-        }
-    },
+// GET /api/prestamos/buscar-usuario
+function getBuscarUsuario(req, res) {
+    const { matricula } = req.query;
+    if (!matricula) return res.status(400).json({ success: false, mensaje: 'Matrícula requerida' });
 
-    /**
-     * POST /api/prestamos/registrar
-     * Registrar nuevo préstamo
-     */
-    registrarPrestamo: async (req, res) => {
-        try {
-            const {
-                vchticket,
-                intmatriculausuario,
-                fechaprestamo,
-                fechadevolucion,
-                intidejemplar,
-                vchobservaciones
-            } = req.body;
+    buscarUsuarioConPrestamos(matricula, (error, usuario) => {
+        if (error) return res.status(500).json({ success: false, mensaje: 'Error al buscar usuario' });
+        if (!usuario) return res.json({ success: false, mensaje: 'Usuario no encontrado' });
+        res.json({ success: true, usuario });
+    });
+}
 
-            // Validaciones
-            if (!vchticket || !intmatriculausuario || !fechaprestamo || !fechadevolucion || !intidejemplar) {
-                return res.status(400).json({
-                    success: false,
-                    mensaje: 'Faltan campos requeridos'
-                });
-            }
+// GET /api/prestamos/generar-ticket
+function getGenerarTicket(req, res) {
+    generarTicket((error, ticket) => {
+        if (error) return res.status(500).json({ success: false, mensaje: 'Error al generar ticket' });
+        res.json({ success: true, ticket });
+    });
+}
 
-            const intmatricula_empleado = req.session.usuario.matricula;
-            const idRolEmpleado = req.session.usuario.idrol;
+// POST /api/prestamos/registrar
+function postRegistrar(req, res) {
+    const { vchticket, intmatriculausuario, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones } = req.body;
 
-            const resultado = await PrestamoModel.registrarPrestamo({
-                vchticket,
-                intmatriculausuario,
-                intmatricula_empleado,
-                idRolEmpleado,
-                fechaprestamo,
-                fechadevolucion,
-                intidejemplar,
-                vchobservaciones
-            });
-
-            console.log('✅ Préstamo registrado - Trigger actualizó disponibilidad automáticamente');
-
-            res.json({
-                success: true,
-                mensaje: 'Préstamo registrado exitosamente',
-                data: {
-                    idprestamo: resultado.idprestamo,
-                    ticket: resultado.ticket,
-                    matricula_empleado: intmatricula_empleado
-                }
-            });
-        } catch (error) {
-            console.error('Error al registrar préstamo:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: error.message || 'Error al registrar préstamo'
-            });
-        }
-    },
-
-    /**
-     * GET /api/prestamos/buscar-por-ticket
-     * Buscar préstamo por ticket para devolución
-     */
-    buscarPrestamoPorTicket: async (req, res) => {
-        try {
-            const { ticket } = req.query;
-
-            if (!ticket) {
-                return res.status(400).json({
-                    success: false,
-                    mensaje: 'Ticket requerido'
-                });
-            }
-
-            const prestamos = await PrestamoModel.buscarPrestamoPorTicket(ticket);
-
-            if (prestamos.length === 0) {
-                return res.json({
-                    success: false,
-                    mensaje: 'No se encontró un préstamo con ese ticket'
-                });
-            }
-
-            res.json({
-                success: true,
-                prestamo: prestamos[0]
-            });
-        } catch (error) {
-            console.error('Error al buscar préstamo:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: 'Error al buscar préstamo'
-            });
-        }
-    },
-
-    /**
-     * POST /api/prestamos/devolucion
-     * Procesar devolución de préstamo
-     */
-    procesarDevolucion: async (req, res) => {
-        try {
-            const {
-                intidprestamo,
-                intidejemplar,
-                intmatricula_empleado,
-                vchentrega,
-                fechareal_devolucion,
-                vchsancion,
-                flmontosancion,
-                boolsancion
-            } = req.body;
-
-            // Validaciones
-            if (!intidprestamo || !intidejemplar || !intmatricula_empleado || !vchentrega || !fechareal_devolucion) {
-                return res.status(400).json({
-                    success: false,
-                    mensaje: 'Faltan campos requeridos'
-                });
-            }
-
-            const resultado = await PrestamoModel.registrarDevolucion({
-                intidprestamo,
-                intidejemplar,
-                intmatricula_empleado,
-                vchentrega,
-                fechareal_devolucion,
-                vchsancion,
-                flmontosancion,
-                boolsancion
-            });
-
-            console.log('✅ Devolución registrada - Trigger actualizó ejemplar y préstamo automáticamente');
-
-            res.json({
-                success: true,
-                mensaje: 'Devolución registrada exitosamente',
-                data: resultado
-            });
-        } catch (error) {
-            console.error('Error al procesar devolución:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: error.message || 'Error al procesar devolución'
-            });
-        }
-    },
-
-    /**
-     * POST /api/prestamos/sancion
-     * Marcar sanción como pagada
-     */
-    marcarSancionPagada: async (req, res) => {
-        try {
-            const { intiddevolucion } = req.body;
-
-            if (!intiddevolucion) {
-                return res.status(400).json({
-                    success: false,
-                    mensaje: 'ID de devolución requerido'
-                });
-            }
-
-            await PrestamoModel.marcarSancionPagada(intiddevolucion);
-
-            res.json({
-                success: true,
-                mensaje: 'Sanción marcada como pagada'
-            });
-        } catch (error) {
-            console.error('Error al marcar sanción:', error);
-            res.status(500).json({
-                success: false,
-                mensaje: 'Error al marcar sanción como pagada'
-            });
-        }
+    if (!vchticket || !intmatriculausuario || !fechaprestamo || !fechadevolucion || !intidejemplar) {
+        return res.status(400).json({ success: false, mensaje: 'Faltan campos requeridos' });
     }
-};
 
-module.exports = PrestamosController;
+    const datos = {
+        vchticket, intmatriculausuario, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones,
+        matriculaEmpleado: req.session.usuario.matricula,
+        idRol: req.session.usuario.idrol
+    };
+
+    registrarPrestamo(datos, (error, resultado) => {
+        if (error) return res.status(500).json({ success: false, mensaje: 'Error al registrar préstamo' });
+        if (!resultado.ok) return res.json({ success: false, mensaje: resultado.mensaje });
+        res.json({ success: true, mensaje: 'Préstamo registrado exitosamente', idprestamo: resultado.idprestamo, ticket: resultado.ticket });
+    });
+}
+
+// POST /api/prestamos/sancion
+function postSancion(req, res) {
+    const { intiddevolucion } = req.body;
+    if (!intiddevolucion) return res.status(400).json({ success: false, error: 'ID de devolución requerido' });
+
+    pagarSancion(intiddevolucion, (error, resultado) => {
+        if (error) return res.status(500).json({ success: false, error: error.message });
+        if (resultado.affectedRows === 0) return res.status(404).json({ success: false, error: 'Devolución no encontrada' });
+        res.json({ success: true, message: 'Sanción marcada como pagada correctamente' });
+    });
+}
+
+// GET /api/prestamos/buscar-por-ticket
+function getBuscarPorTicket(req, res) {
+    const { ticket } = req.query;
+    if (!ticket) return res.status(400).json({ success: false, mensaje: 'Ticket requerido' });
+
+    buscarPorTicket(ticket, (error, resultados) => {
+        if (error) return res.status(500).json({ success: false, mensaje: 'Error al buscar préstamo' });
+        if (resultados.length === 0) return res.json({ success: false, mensaje: 'No se encontró un préstamo con ese ticket' });
+        res.json({ success: true, prestamo: resultados[0] });
+    });
+}
+
+// POST /api/prestamos/devolucion
+function postDevolucion(req, res) {
+    const { intidprestamo, intidejemplar, intmatricula_empleado, vchentrega, fechareal_devolucion } = req.body;
+    if (!intidprestamo || !intidejemplar || !intmatricula_empleado || !vchentrega || !fechareal_devolucion) {
+        return res.status(400).json({ success: false, mensaje: 'Faltan campos requeridos' });
+    }
+
+    registrarDevolucion(req.body, (error, resultado) => {
+        if (error) return res.status(500).json({ success: false, mensaje: 'Error al registrar devolución' });
+        if (!resultado.ok) return res.json({ success: false, mensaje: resultado.mensaje });
+        res.json({
+            success: true,
+            mensaje: 'Devolución registrada exitosamente',
+            data: {
+                iddevolucion: resultado.iddevolucion,
+                sancion_aplicada: resultado.montoSancion > 0,
+                monto_sancion: resultado.montoSancion.toFixed(2)
+            }
+        });
+    });
+}
+
+module.exports = { getPrestamos, getBuscarEjemplares, getBuscarUsuario, getGenerarTicket, postRegistrar, postSancion, getBuscarPorTicket, postDevolucion };

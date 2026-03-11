@@ -1,486 +1,280 @@
-// prestamo.model.js - Modelo de préstamos y devoluciones
-const conexion = require('../config/database.config');
+const conexion = require('../config/db');
 
-const PrestamoModel = {
-    /**
-     * Obtener todos los préstamos con filtros
-     */
-    obtenerPrestamos: (filtro = 'todos', busqueda = '') => {
-        return new Promise((resolve, reject) => {
-            let sql = `
-                SELECT 
-                    p.intidprestamo,
-                    p.vchticket,
-                    p.intmatricula_usuario,
-                    p.intmatricula_empleado,
-                    p.fecha_prestamo,
-                    p.fecha_devolucion,
-                    p.booldevuelto,
-                    p.vchobservaciones,
-                    CONCAT(u.vchnombre, ' ', u.vchapaterno, ' ', COALESCE(u.vchamaterno, '')) as nombre_usuario,
-                    l.vchtitulo as titulo_libro,
-                    l.vchautor as autor_libro,
-                    ej.vchcodigobarras,
-                    ej.intidejemplar,
-                    d.fechareal_devolucion,
-                    d.flmontosancion,
-                    d.boolsancion,
-                    d.vchsancion,
-                    d.intiddevolucion,
-                    DATEDIFF(CURDATE(), p.fecha_devolucion) as dias_diferencia,
-                    CASE 
-                        WHEN p.booldevuelto = 1 THEN 'devuelto'
-                        WHEN DATEDIFF(CURDATE(), p.fecha_devolucion) > 0 THEN 'vencido'
-                        WHEN DATEDIFF(CURDATE(), p.fecha_devolucion) = 0 THEN 'proximo'
-                        ELSE 'activo'
-                    END as estado
-                FROM tblprestamos p
-                LEFT JOIN tblusuarios u ON p.intmatricula_usuario = u.intmatricula
-                LEFT JOIN tblejemplares ej ON p.intidejemplar = ej.intidejemplar
-                LEFT JOIN tbllibros l ON ej.vchfolio = l.vchfolio
-                LEFT JOIN tbldevolucion d ON p.intidprestamo = d.intidprestamo
-            `;
+// Obtener todos los préstamos con filtros opcionales
+function obtenerPrestamos(filtro, busqueda, callback) {
+    let sql = `
+        SELECT 
+            p.intidprestamo, p.vchticket, p.intmatricula_usuario, p.intmatricula_empleado,
+            p.fecha_prestamo, p.fecha_devolucion, p.booldevuelto, p.vchobservaciones,
+            p.intidejemplar, p.dtfecharegistro,
+            CONCAT(u.vchnombre, ' ', u.vchapaterno, ' ', COALESCE(u.vchamaterno, '')) as nombre_usuario,
+            u.vchcorreo as correo_usuario, u.vchtelefono as telefono_usuario,
+            CONCAT(e.vchnombre, ' ', e.vchapaterno, ' ', COALESCE(e.vchamaterno, '')) as nombre_empleado,
+            l.vchtitulo as titulo_libro, l.vchautor as autor_libro, l.vchfolio,
+            ej.vchcodigobarras, ej.vchedicion,
+            d.intiddevolucion, d.fechareal_devolucion, d.intmatricula_empleado as matricula_recibio,
+            d.vchsancion, d.flmontosancion, d.boolsancion, d.intidestrega,
+            COALESCE(
+                CONCAT(emp.vchnombre, ' ', emp.vchapaterno, ' ', COALESCE(emp.vchamaterno, '')),
+                CONCAT(adm.vchnombre, ' ', adm.vchapaterno, ' ', COALESCE(adm.vchamaterno, ''))
+            ) as nombre_recibio,
+            DATEDIFF(p.fecha_devolucion, CURDATE()) as dias_restantes,
+            CASE 
+                WHEN p.booldevuelto = 1 THEN 'devuelto'
+                WHEN p.booldevuelto = 0 AND CURDATE() > p.fecha_devolucion THEN 'vencido'
+                WHEN p.booldevuelto = 0 AND DATEDIFF(p.fecha_devolucion, CURDATE()) <= 3 THEN 'proximo'
+                WHEN p.booldevuelto = 0 THEN 'activo'
+                ELSE 'activo'
+            END as estado
+        FROM tblprestamos p
+        LEFT JOIN tblusuarios u ON p.intmatricula_usuario = u.intmatricula
+        LEFT JOIN tblusuarios e ON p.intmatricula_empleado = e.intmatricula
+        LEFT JOIN tblejemplares ej ON p.intidejemplar = ej.intidejemplar
+        LEFT JOIN tbllibros l ON ej.vchfolio = l.vchfolio
+        LEFT JOIN tbldevolucion d ON p.intidprestamo = d.intidprestamo
+        LEFT JOIN tblempleados emp ON d.intmatricula_empleado = emp.intmatricula
+        LEFT JOIN tbladministrador adm ON d.intmatricula_empleado = adm.intmatricula
+        WHERE 1=1
+    `;
 
-            let condiciones = [];
-            let params = [];
+    const params = [];
 
-            // Filtros de estado
-            if (filtro === 'activos') {
-                condiciones.push('p.booldevuelto = 0');
-            } else if (filtro === 'devueltos') {
-                condiciones.push('p.booldevuelto = 1');
-            } else if (filtro === 'vencidos') {
-                condiciones.push('p.booldevuelto = 0 AND DATEDIFF(CURDATE(), p.fecha_devolucion) > 0');
-            } else if (filtro === 'proximos') {
-                condiciones.push('p.booldevuelto = 0 AND DATEDIFF(CURDATE(), p.fecha_devolucion) = 0');
-            } else if (filtro === 'con_sancion') {
-                condiciones.push('d.flmontosancion > 0 AND d.boolsancion = 0');
-            }
-
-            // Búsqueda
-            if (busqueda) {
-                condiciones.push(`(
-                    p.vchticket LIKE ? OR
-                    u.vchnombre LIKE ? OR
-                    u.vchapaterno LIKE ? OR
-                    u.vchamaterno LIKE ? OR
-                    l.vchtitulo LIKE ? OR
-                    p.intmatricula_usuario LIKE ?
-                )`);
-                const terminoBusqueda = `%${busqueda}%`;
-                params = [terminoBusqueda, terminoBusqueda, terminoBusqueda, terminoBusqueda, terminoBusqueda, terminoBusqueda];
-            }
-
-            if (condiciones.length > 0) {
-                sql += ' WHERE ' + condiciones.join(' AND ');
-            }
-
-            sql += ' ORDER BY p.fecha_prestamo DESC';
-
-            conexion.query(sql, params, (error, resultados) => {
-                if (error) {
-                    return reject(error);
-                }
-                resolve(resultados);
-            });
-        });
-    },
-
-    /**
-     * Obtener estadísticas de préstamos
-     */
-    obtenerEstadisticas: () => {
-        return new Promise((resolve, reject) => {
-            const sql = `
-                SELECT
-                    COUNT(*) as total,
-                    SUM(CASE WHEN booldevuelto = 0 THEN 1 ELSE 0 END) as activos,
-                    SUM(CASE WHEN booldevuelto = 1 THEN 1 ELSE 0 END) as devueltos,
-                    SUM(CASE WHEN booldevuelto = 0 AND DATEDIFF(CURDATE(), fecha_devolucion) > 0 THEN 1 ELSE 0 END) as vencidos,
-                    SUM(CASE WHEN booldevuelto = 0 AND DATEDIFF(CURDATE(), fecha_devolucion) = 0 THEN 1 ELSE 0 END) as proximos,
-                    (SELECT COUNT(*) FROM tbldevolucion WHERE flmontosancion > 0 AND boolsancion = 0) as con_sancion_pendiente
-                FROM tblprestamos
-            `;
-
-            conexion.query(sql, (error, resultados) => {
-                if (error) {
-                    return reject(error);
-                }
-                resolve(resultados[0]);
-            });
-        });
-    },
-
-    /**
-     * Buscar ejemplares disponibles para préstamo
-     */
-    buscarEjemplaresDisponibles: (termino) => {
-        return new Promise((resolve, reject) => {
-            const sql = `
-                SELECT 
-                    l.vchfolio,
-                    l.vchtitulo,
-                    l.vchautor,
-                    l.vcheditorial,
-                    l.vchisbn,
-                    l.imagen,
-                    c.vchcategoria,
-                    GROUP_CONCAT(
-                        CONCAT_WS('|', 
-                            e.intidejemplar, 
-                            e.vchcodigobarras, 
-                            e.vchedicion, 
-                            e.vchubicacion, 
-                            e.booldisponible
-                        ) SEPARATOR '||'
-                    ) as ejemplares_data,
-                    COUNT(e.intidejemplar) as total_ejemplares,
-                    SUM(CASE WHEN e.booldisponible = 1 THEN 1 ELSE 0 END) as ejemplares_disponibles
-                FROM tbllibros l
-                LEFT JOIN tblejemplares e ON l.vchfolio = e.vchfolio
-                LEFT JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
-                WHERE (
-                    l.vchtitulo LIKE ? OR
-                    l.vchautor LIKE ? OR
-                    l.vchisbn LIKE ? OR
-                    l.vcheditorial LIKE ? OR
-                    e.vchcodigobarras LIKE ? OR
-                    l.vchfolio LIKE ? OR
-                    c.vchcategoria LIKE ?
-                )
-                GROUP BY l.vchfolio
-                HAVING ejemplares_disponibles > 0
-                ORDER BY l.vchtitulo ASC
-                LIMIT 50
-            `;
-
-            const terminoBusqueda = `%${termino}%`;
-
-            conexion.query(sql, 
-                [terminoBusqueda, terminoBusqueda, terminoBusqueda, terminoBusqueda, 
-                 terminoBusqueda, terminoBusqueda, terminoBusqueda], 
-            (error, resultados) => {
-                if (error) {
-                    return reject(error);
-                }
-
-                // Procesar resultados y convertir imagen a base64
-                const libros = resultados.map(libro => {
-                    if (libro.imagen) {
-                        libro.imagen = `data:image/jpeg;base64,${libro.imagen.toString('base64')}`;
-                    }
-
-                    // Parsear ejemplares
-                    if (libro.ejemplares_data) {
-                        libro.ejemplares = libro.ejemplares_data.split('||').map(ej => {
-                            const [intidejemplar, vchcodigobarras, vchedicion, vchubicacion, booldisponible] = ej.split('|');
-                            return {
-                                intidejemplar: parseInt(intidejemplar),
-                                vchcodigobarras,
-                                vchedicion,
-                                vchubicacion,
-                                booldisponible: parseInt(booldisponible)
-                            };
-                        });
-                        delete libro.ejemplares_data;
-                    }
-
-                    return libro;
-                });
-
-                resolve(libros);
-            });
-        });
-    },
-
-    /**
-     * Buscar usuario por matrícula
-     */
-    buscarUsuarioPorMatricula: (matricula) => {
-        return new Promise((resolve, reject) => {
-            const sql = `
-                SELECT 
-                    u.intmatricula,
-                    u.vchnombre,
-                    u.vchapaterno,
-                    u.vchamaterno,
-                    u.vchcorreo,
-                    u.vchtelefono,
-                    (SELECT COUNT(*) FROM tblprestamos WHERE intmatricula_usuario = u.intmatricula AND booldevuelto = 0) as prestamos_pendientes
-                FROM tblusuarios u
-                WHERE u.intmatricula = ?
-            `;
-
-            conexion.query(sql, [matricula], (error, resultados) => {
-                if (error) {
-                    return reject(error);
-                }
-                resolve(resultados);
-            });
-        });
-    },
-
-    /**
-     * Generar ticket único
-     */
-    generarTicket: () => {
-        return new Promise((resolve, reject) => {
-            const sql = `
-                SELECT vchticket 
-                FROM tblprestamos 
-                WHERE YEAR(fecha_prestamo) = YEAR(CURDATE())
-                ORDER BY intidprestamo DESC 
-                LIMIT 1
-            `;
-
-            conexion.query(sql, (error, resultados) => {
-                if (error) {
-                    return reject(error);
-                }
-
-                const year = new Date().getFullYear();
-                let numero = 1;
-
-                if (resultados.length > 0) {
-                    const ultimoTicket = resultados[0].vchticket;
-                    const match = ultimoTicket.match(/TK-\d{4}-(\d+)/);
-                    if (match) {
-                        numero = parseInt(match[1]) + 1;
-                    }
-                }
-
-                const nuevoTicket = `TK-${year}-${String(numero).padStart(3, '0')}`;
-                resolve(nuevoTicket);
-            });
-        });
-    },
-
-    /**
-     * Registrar préstamo (con transacción)
-     */
-    registrarPrestamo: (datos) => {
-        return new Promise((resolve, reject) => {
-            conexion.beginTransaction(error => {
-                if (error) {
-                    return reject(error);
-                }
-
-                // 1. Validar usuario
-                const sqlValidarUsuario = "SELECT intmatricula FROM tblusuarios WHERE intmatricula = ?";
-                
-                conexion.query(sqlValidarUsuario, [datos.intmatriculausuario], (errorU, usuarioResult) => {
-                    if (errorU || usuarioResult.length === 0) {
-                        return conexion.rollback(() => {
-                            reject(new Error('Usuario no encontrado'));
-                        });
-                    }
-
-                    // 2. Validar empleado
-                    const tablaEmpleado = datos.idRolEmpleado === 1 ? 'tbladministrador' : 'tblempleados';
-                    const sqlValidarEmpleado = `SELECT intmatricula FROM ${tablaEmpleado} WHERE intmatricula = ?`;
-                    
-                    conexion.query(sqlValidarEmpleado, [datos.intmatricula_empleado], (errorE, empleadoResult) => {
-                        if (errorE || empleadoResult.length === 0) {
-                            return conexion.rollback(() => {
-                                reject(new Error('Empleado no encontrado'));
-                            });
-                        }
-
-                        // 3. Validar disponibilidad con bloqueo FOR UPDATE
-                        const sqlValidarEjemplar = `
-                            SELECT booldisponible 
-                            FROM tblejemplares 
-                            WHERE intidejemplar = ? 
-                            FOR UPDATE
-                        `;
-                        
-                        conexion.query(sqlValidarEjemplar, [datos.intidejemplar], (errorEj, ejemplarResult) => {
-                            if (errorEj || ejemplarResult.length === 0) {
-                                return conexion.rollback(() => {
-                                    reject(new Error('Ejemplar no encontrado'));
-                                });
-                            }
-
-                            if (ejemplarResult[0].booldisponible == 0) {
-                                return conexion.rollback(() => {
-                                    reject(new Error('Este ejemplar no está disponible'));
-                                });
-                            }
-
-                            // 4. Insertar préstamo (el trigger actualizará disponibilidad)
-                            const sqlInsertPrestamo = `
-                                INSERT INTO tblprestamos 
-                                (vchticket, intmatricula_usuario, intmatricula_empleado, 
-                                 fecha_prestamo, fecha_devolucion, intidejemplar, 
-                                 vchobservaciones, booldevuelto)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, 0)
-                            `;
-
-                            conexion.query(sqlInsertPrestamo, 
-                                [datos.vchticket, datos.intmatriculausuario, datos.intmatricula_empleado, 
-                                 datos.fechaprestamo, datos.fechadevolucion, datos.intidejemplar, 
-                                 datos.vchobservaciones || null],
-                            (errorP, resultadoP) => {
-                                if (errorP) {
-                                    return conexion.rollback(() => {
-                                        reject(errorP);
-                                    });
-                                }
-
-                                // Commit
-                                conexion.commit(errorC => {
-                                    if (errorC) {
-                                        return conexion.rollback(() => {
-                                            reject(errorC);
-                                        });
-                                    }
-
-                                    resolve({
-                                        idprestamo: resultadoP.insertId,
-                                        ticket: datos.vchticket
-                                    });
-                                });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    },
-
-    /**
-     * Buscar préstamo por ticket
-     */
-    buscarPrestamoPorTicket: (ticket) => {
-        return new Promise((resolve, reject) => {
-            const sql = `
-                SELECT 
-                    p.intidprestamo,
-                    p.vchticket,
-                    p.intmatricula_usuario,
-                    p.intmatricula_empleado,
-                    p.fecha_prestamo,
-                    p.fecha_devolucion,
-                    p.booldevuelto,
-                    p.intidejemplar,
-                    CONCAT(u.vchnombre, ' ', u.vchapaterno, ' ', COALESCE(u.vchamaterno, '')) as nombre_usuario,
-                    l.vchtitulo as titulo_libro,
-                    l.vchautor as autor_libro,
-                    ej.vchcodigobarras
-                FROM tblprestamos p
-                LEFT JOIN tblusuarios u ON p.intmatricula_usuario = u.intmatricula
-                LEFT JOIN tblejemplares ej ON p.intidejemplar = ej.intidejemplar
-                LEFT JOIN tbllibros l ON ej.vchfolio = l.vchfolio
-                WHERE p.vchticket = ?
-            `;
-
-            conexion.query(sql, [ticket], (error, resultados) => {
-                if (error) {
-                    return reject(error);
-                }
-                resolve(resultados);
-            });
-        });
-    },
-
-    /**
-     * Registrar devolución (con transacción)
-     */
-    registrarDevolucion: (datos) => {
-        return new Promise((resolve, reject) => {
-            conexion.beginTransaction(error => {
-                if (error) {
-                    return reject(error);
-                }
-
-                // 1. Verificar que el préstamo existe y no está devuelto
-                const sqlVerificar = "SELECT booldevuelto FROM tblprestamos WHERE intidprestamo = ?";
-                
-                conexion.query(sqlVerificar, [datos.intidprestamo], (errorV, prestamoResult) => {
-                    if (errorV || prestamoResult.length === 0) {
-                        return conexion.rollback(() => {
-                            reject(new Error('Préstamo no encontrado'));
-                        });
-                    }
-
-                    if (prestamoResult[0].booldevuelto == 1) {
-                        return conexion.rollback(() => {
-                            reject(new Error('Este préstamo ya fue devuelto anteriormente'));
-                        });
-                    }
-
-                    // 2. Obtener ID de estado de entrega
-                    const sqlEstado = "SELECT intidestrega FROM tblestadoentrega WHERE vchestadoentrega = ?";
-                    
-                    conexion.query(sqlEstado, [datos.vchentrega], (errorE, estadoResult) => {
-                        let intidestrega = null;
-                        
-                        if (estadoResult && estadoResult.length > 0) {
-                            intidestrega = estadoResult[0].intidestrega;
-                        } else {
-                            // Valores por defecto
-                            if (datos.vchentrega === 'Bueno') intidestrega = 1;
-                            else if (datos.vchentrega === 'Regular') intidestrega = 2;
-                            else if (datos.vchentrega === 'Mal') intidestrega = 3;
-                        }
-
-                        // 3. Insertar devolución (el trigger actualizará ejemplar y préstamo)
-                        const sqlDevolucion = `
-                            INSERT INTO tbldevolucion 
-                            (intidprestamo, fechareal_devolucion, intmatricula_empleado, 
-                             vchsancion, flmontosancion, boolsancion, intidestrega)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        `;
-
-                        const montoSancion = datos.flmontosancion ? parseFloat(datos.flmontosancion) : 0;
-                        const sancionCumplida = datos.boolsancion ? 1 : 0;
-
-                        conexion.query(sqlDevolucion, 
-                            [datos.intidprestamo, datos.fechareal_devolucion, datos.intmatricula_empleado, 
-                             datos.vchsancion || null, montoSancion, sancionCumplida, intidestrega],
-                        (errorD, resultadoD) => {
-                            if (errorD) {
-                                return conexion.rollback(() => {
-                                    reject(errorD);
-                                });
-                            }
-
-                            // Commit
-                            conexion.commit(errorC => {
-                                if (errorC) {
-                                    return conexion.rollback(() => {
-                                        reject(errorC);
-                                    });
-                                }
-
-                                resolve({
-                                    iddevolucion: resultadoD.insertId,
-                                    sancion_aplicada: montoSancion > 0,
-                                    monto_sancion: montoSancion.toFixed(2)
-                                });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    },
-
-    /**
-     * Marcar sanción como pagada
-     */
-    marcarSancionPagada: (idDevolucion) => {
-        return new Promise((resolve, reject) => {
-            const sql = "UPDATE tbldevolucion SET boolsancion = 1 WHERE intiddevolucion = ?";
-
-            conexion.query(sql, [idDevolucion], (error, resultado) => {
-                if (error) {
-                    return reject(error);
-                }
-                resolve(resultado);
-            });
-        });
+    if (filtro === 'activos') {
+        sql += " AND p.booldevuelto = 0 AND CURDATE() <= p.fecha_devolucion";
+    } else if (filtro === 'devueltos') {
+        sql += " AND p.booldevuelto = 1";
+    } else if (filtro === 'vencidos') {
+        sql += " AND p.booldevuelto = 0 AND CURDATE() > p.fecha_devolucion";
+    } else if (filtro === 'proximos') {
+        sql += " AND p.booldevuelto = 0 AND DATEDIFF(p.fecha_devolucion, CURDATE()) BETWEEN 0 AND 3";
+    } else if (filtro === 'con_sancion') {
+        sql += " AND d.flmontosancion > 0 AND d.boolsancion = 0";
     }
-};
 
-module.exports = PrestamoModel;
+    if (busqueda && busqueda.trim()) {
+        sql += ` AND (
+            p.vchticket LIKE ? OR p.intmatricula_usuario LIKE ? OR
+            u.vchnombre LIKE ? OR u.vchapaterno LIKE ? OR u.vchamaterno LIKE ? OR
+            l.vchtitulo LIKE ? OR l.vchautor LIKE ? OR ej.vchcodigobarras LIKE ?
+        )`;
+        const b = `%${busqueda}%`;
+        params.push(b, b, b, b, b, b, b, b);
+    }
+
+    sql += " ORDER BY p.fecha_prestamo DESC";
+    conexion.query(sql, params, callback);
+}
+
+// Buscar ejemplares disponibles por término
+function buscarEjemplares(termino, callback) {
+    const t = `%${termino}%`;
+    const sql = `
+        SELECT 
+            e.intidejemplar, e.vchcodigobarras, e.vchedicion, e.vchfolio,
+            e.booldisponible, e.intidestado,
+            l.vchtitulo, l.vchautor, l.vcheditorial, l.vchisbn, l.imagen, l.intanio,
+            c.vchcategoria,
+            u.vchubicacion, u.vchdescripcion AS descripcion_ubicacion,
+            es.vchestadolibro,
+            (SELECT COUNT(*) FROM tblejemplares 
+             WHERE vchfolio = l.vchfolio AND booldisponible = 1) as ejemplares_disponibles
+        FROM tblejemplares e
+        INNER JOIN tbllibros l ON e.vchfolio = l.vchfolio
+        LEFT JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
+        LEFT JOIN tblubicacion u ON e.intidubicacion = u.intidubicacion
+        LEFT JOIN tblestado es ON e.intidestado = es.intidestado
+        WHERE e.booldisponible = 1
+        AND (l.vchtitulo LIKE ? OR l.vchautor LIKE ? OR l.vchisbn LIKE ? OR
+             l.vcheditorial LIKE ? OR e.vchcodigobarras LIKE ? OR e.vchfolio LIKE ? OR
+             c.vchcategoria LIKE ?)
+        ORDER BY l.vchtitulo ASC LIMIT 50
+    `;
+    conexion.query(sql, [t, t, t, t, t, t, t], callback);
+}
+
+// Buscar usuario por matrícula con sus préstamos pendientes
+function buscarUsuarioConPrestamos(matricula, callback) {
+    const sql = `
+        SELECT u.intmatricula, u.vchnombre, u.vchapaterno, u.vchamaterno,
+               u.vchcorreo, u.vchtelefono, r.vchrol
+        FROM tblusuarios u
+        LEFT JOIN tblroles r ON u.intidrol = r.intidrol
+        WHERE u.intmatricula = ?
+    `;
+    conexion.query(sql, [matricula], (error, resultados) => {
+        if (error) return callback(error, null);
+        if (resultados.length === 0) return callback(null, null);
+
+        const usuario = resultados[0];
+        const sqlPendientes = "SELECT COUNT(*) as pendientes FROM tblprestamos WHERE intmatricula_usuario = ? AND booldevuelto = 0";
+        conexion.query(sqlPendientes, [matricula], (errorP, resPendientes) => {
+            usuario.prestamos_pendientes = resPendientes && resPendientes[0] ? resPendientes[0].pendientes : 0;
+            callback(null, usuario);
+        });
+    });
+}
+
+// Generar ticket único
+function generarTicket(callback) {
+    const anio = new Date().getFullYear();
+    const sql = "SELECT vchticket FROM tblprestamos WHERE vchticket LIKE ? ORDER BY intidprestamo DESC LIMIT 1";
+    conexion.query(sql, [`TK-${anio}-%`], (error, resultados) => {
+        if (error) return callback(error, null);
+        let numero = 1;
+        if (resultados.length > 0) {
+            const partes = resultados[0].vchticket.split('-');
+            numero = parseInt(partes[partes.length - 1]) + 1;
+        }
+        const ticket = `TK-${anio}-${String(numero).padStart(3, '0')}`;
+        callback(null, ticket);
+    });
+}
+
+// Registrar nuevo préstamo (con transacción)
+function registrarPrestamo(datos, callback) {
+    const { vchticket, intmatriculausuario, matriculaEmpleado, idRol, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones } = datos;
+
+    conexion.beginTransaction(error => {
+        if (error) return callback(error, null);
+
+        // Verificar que el usuario existe
+        conexion.query("SELECT intmatricula FROM tblusuarios WHERE intmatricula = ?", [intmatriculausuario], (errorU, resU) => {
+            if (errorU || resU.length === 0) {
+                return conexion.rollback(() => callback(null, { ok: false, mensaje: `El usuario con matrícula ${intmatriculausuario} no existe` }));
+            }
+
+            // Verificar que el empleado existe en su tabla
+            const tablaEmpleado = idRol === 1 ? 'tbladministrador' : 'tblempleados';
+            conexion.query(`SELECT intmatricula FROM ${tablaEmpleado} WHERE intmatricula = ?`, [matriculaEmpleado], (errorE, resE) => {
+                if (errorE || resE.length === 0) {
+                    const tipo = idRol === 1 ? 'administrador' : 'empleado';
+                    return conexion.rollback(() => callback(null, { ok: false, mensaje: `La matrícula ${matriculaEmpleado} no existe en la tabla de ${tipo}s` }));
+                }
+
+                // Verificar disponibilidad del ejemplar
+                conexion.query("SELECT booldisponible FROM tblejemplares WHERE intidejemplar = ?", [intidejemplar], (errorV, resV) => {
+                    if (errorV || resV.length === 0 || resV[0].booldisponible != 1) {
+                        return conexion.rollback(() => callback(null, { ok: false, mensaje: 'El ejemplar ya no está disponible' }));
+                    }
+
+                    // Insertar préstamo
+                    const sqlPrestamo = `
+                        INSERT INTO tblprestamos 
+                        (vchticket, intmatricula_usuario, intmatricula_empleado, 
+                         fecha_prestamo, fecha_devolucion, booldevuelto, intidejemplar, vchobservaciones)
+                        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+                    `;
+                    conexion.query(sqlPrestamo, [vchticket, intmatriculausuario, matriculaEmpleado, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones || null], (errorP, resP) => {
+                        if (errorP) {
+                            return conexion.rollback(() => callback(errorP, null));
+                        }
+
+                        // Marcar ejemplar como no disponible
+                        conexion.query("UPDATE tblejemplares SET booldisponible = 0 WHERE intidejemplar = ?", [intidejemplar], (errorA) => {
+                            if (errorA) return conexion.rollback(() => callback(errorA, null));
+
+                            conexion.commit(errorC => {
+                                if (errorC) return conexion.rollback(() => callback(errorC, null));
+                                callback(null, { ok: true, idprestamo: resP.insertId, ticket: vchticket });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+
+// Marcar sanción como pagada
+function pagarSancion(intiddevolucion, callback) {
+    const sql = "UPDATE tbldevolucion SET boolsancion = 1 WHERE intiddevolucion = ?";
+    conexion.query(sql, [intiddevolucion], callback);
+}
+
+// Buscar préstamo por ticket
+function buscarPorTicket(ticket, callback) {
+    const sql = `
+        SELECT p.intidprestamo, p.vchticket, p.intmatricula_usuario, p.intmatricula_empleado,
+               p.fecha_prestamo, p.fecha_devolucion, p.booldevuelto, p.intidejemplar,
+               CONCAT(u.vchnombre, ' ', u.vchapaterno, ' ', COALESCE(u.vchamaterno, '')) as nombre_usuario,
+               l.vchtitulo as titulo_libro, l.vchautor as autor_libro,
+               ej.vchcodigobarras
+        FROM tblprestamos p
+        LEFT JOIN tblusuarios u ON p.intmatricula_usuario = u.intmatricula
+        LEFT JOIN tblejemplares ej ON p.intidejemplar = ej.intidejemplar
+        LEFT JOIN tbllibros l ON ej.vchfolio = l.vchfolio
+        WHERE p.vchticket = ?
+    `;
+    conexion.query(sql, [ticket], callback);
+}
+
+// Registrar devolución (con transacción)
+function registrarDevolucion(datos, callback) {
+    const { intidprestamo, intidejemplar, intmatricula_empleado, vchentrega, fechareal_devolucion, vchsancion, flmontosancion, boolsancion } = datos;
+
+    conexion.beginTransaction(error => {
+        if (error) return callback(error, null);
+
+        // Verificar que el préstamo existe y no fue devuelto
+        conexion.query("SELECT booldevuelto FROM tblprestamos WHERE intidprestamo = ?", [intidprestamo], (errorV, resV) => {
+            if (errorV || resV.length === 0) {
+                return conexion.rollback(() => callback(null, { ok: false, mensaje: 'Préstamo no encontrado' }));
+            }
+            if (resV[0].booldevuelto == 1) {
+                return conexion.rollback(() => callback(null, { ok: false, mensaje: 'Este préstamo ya fue devuelto anteriormente' }));
+            }
+
+            // Obtener ID estado entrega
+            conexion.query("SELECT intidestrega FROM tblestadoentrega WHERE vchestadoentrega = ?", [vchentrega], (errorE, resE) => {
+                let intidestrega = null;
+                if (resE && resE.length > 0) {
+                    intidestrega = resE[0].intidestrega;
+                } else {
+                    if (vchentrega === 'Bueno') intidestrega = 1;
+                    else if (vchentrega === 'Regular') intidestrega = 2;
+                    else if (vchentrega === 'Mal') intidestrega = 3;
+                }
+
+                const montoSancion = flmontosancion ? parseFloat(flmontosancion) : 0;
+                const sancionCumplida = boolsancion ? 1 : 0;
+
+                // Insertar devolución
+                const sqlDev = `
+                    INSERT INTO tbldevolucion 
+                    (intidprestamo, fechareal_devolucion, intmatricula_empleado, 
+                     vchsancion, flmontosancion, boolsancion, intidestrega)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `;
+                conexion.query(sqlDev, [intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion || null, montoSancion, sancionCumplida, intidestrega], (errorD, resD) => {
+                    if (errorD) return conexion.rollback(() => callback(errorD, null));
+
+                    // Marcar préstamo como devuelto
+                    conexion.query("UPDATE tblprestamos SET booldevuelto = 1 WHERE intidprestamo = ?", [intidprestamo], (errorUP) => {
+                        if (errorUP) return conexion.rollback(() => callback(errorUP, null));
+
+                        // Liberar ejemplar
+                        conexion.query("UPDATE tblejemplares SET booldisponible = 1 WHERE intidejemplar = ?", [intidejemplar], (errorUE) => {
+                            if (errorUE) return conexion.rollback(() => callback(errorUE, null));
+
+                            conexion.commit(errorC => {
+                                if (errorC) return conexion.rollback(() => callback(errorC, null));
+                                callback(null, { ok: true, iddevolucion: resD.insertId, montoSancion });
+                            });
+                        });
+                    });
+                });
+            });
+        });
+    });
+}
+
+module.exports = {
+    obtenerPrestamos,
+    buscarEjemplares,
+    buscarUsuarioConPrestamos,
+    generarTicket,
+    registrarPrestamo,
+    pagarSancion,
+    buscarPorTicket,
+    registrarDevolucion
+};
