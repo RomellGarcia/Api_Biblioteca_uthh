@@ -42,9 +42,6 @@ app.use(session({
     }
 }));
 
-// 3. Manejo de Pre-flight (OPTIONS) explícito
-app.options('*', cors()); 
-
 // Rutas
 app.use('/api/auth', require('./src/routes/auth.routes'));
 app.use('/api/libros', require('./src/routes/libros.routes'));
