@@ -58,12 +58,18 @@ async function login(req, res) {
 
             const token = generarToken(datosUsuario);
 
+            const redirectPorRol = {
+                1: '/HTML/gestion_prestamos.html', // Administrador
+                2: '/HTML/gestion_prestamos.html', // Empleado
+                3: '/HTML/index.html'              // Usuario
+            };
+
             res.json({
                 success: true,
                 message: 'Inicio de sesión exitoso',
                 token,
                 usuario: datosUsuario,
-                redirect: '/HTML/index.html'
+                redirect: redirectPorRol[usuario.intidrol] || '/HTML/index.html'
             });
         });
     });
