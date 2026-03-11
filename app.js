@@ -13,7 +13,7 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-    origin: '*', 
+    origin: 'http://localhost:3000' || env.FRONTEND_URL, 
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
