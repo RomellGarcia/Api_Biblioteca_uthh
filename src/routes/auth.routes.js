@@ -23,12 +23,5 @@ router.get('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminEmpl
 
 router.post('/registro', verificarAutenticacion, registro);
 
-module.exports = {
-    login, verificar, logout,
-    getUsuarios, getAdministradores, getEmpleados,
-    deleteUsuario, getPerfil, putPerfil,
-    getUsuarioPorMatricula, getRoles, postActualizarUsuario,
-    registro  // ← agregar
-};
 
 module.exports = router;

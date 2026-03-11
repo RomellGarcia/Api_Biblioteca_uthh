@@ -196,7 +196,7 @@ function getRoles(req, res) {
 }
 
 // POST /api/auth/usuarios/actualizar — actualizar usuario por admin
-async function postActualizarUsuario(req, res) {
+const postActualizarUsuario = async (req, res) => {
     const { tabla } = req.body;
     const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
 
@@ -278,5 +278,6 @@ module.exports = {
     getUsuarios, getAdministradores, getEmpleados,
     deleteUsuario, getPerfil, putPerfil,
     getUsuarioPorMatricula, getRoles, postActualizarUsuario,
-    obtenerUltimaMatricula, registrarUsuario
+    obtenerUltimaMatricula, registrarUsuario,
+    registro
 };
