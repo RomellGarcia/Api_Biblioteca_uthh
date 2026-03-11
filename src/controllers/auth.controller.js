@@ -278,5 +278,5 @@ module.exports = {
     getUsuarios, getAdministradores, getEmpleados,
     deleteUsuario, getPerfil, putPerfil,
     getUsuarioPorMatricula, getRoles, postActualizarUsuario,
-    registro  // ← solo esto, no obtenerUltimaMatricula ni registrarUsuario
+    obtenerUltimaMatricula, registrarUsuario
 };
