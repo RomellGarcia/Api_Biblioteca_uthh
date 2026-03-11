@@ -29,38 +29,25 @@ async function login(req, res) {
     }
 
     buscarUsuarioPorMatricula(matriculaNum, async (error, resultados) => {
-        if (error) {
-            console.error('Error al buscar usuario:', error);
-            return res.status(500).json({ success: false, message: 'Error de base de datos' });
-        }
-
-        if (resultados.length === 0) {
-            return res.status(404).json({ success: false, message: 'Perfil no encontrado' });
-        }
+        if (error) return res.status(500).json({ success: false, message: 'Error de base de datos' });
+        if (resultados.length === 0) return res.status(404).json({ success: false, message: 'Perfil no encontrado' });
 
         const usuario = resultados[0];
 
         const passwordValido = await verificarPassword(password, usuario.vchpassword);
-        if (!passwordValido) {
-            return res.status(401).json({ success: false, message: 'Contraseña incorrecta' });
-        }
+        if (!passwordValido) return res.status(401).json({ success: false, message: 'Contraseña incorrecta' });
 
         obtenerRolPorId(usuario.intidrol, (errorRol, resultadosRol) => {
-            if (errorRol) {
-                return res.status(500).json({ success: false, message: 'Error al obtener rol' });
-            }
+            if (errorRol) return res.status(500).json({ success: false, message: 'Error al obtener rol' });
 
             const nombreRol = resultadosRol.length > 0 ? resultadosRol[0].vchrol.trim() : 'Sin Rol';
             const apellidos = `${usuario.vchapaterno || ''} ${usuario.vchamaterno || ''}`.trim();
             const nombreCompleto = `${usuario.vchnombre} ${apellidos}`.trim();
 
-            req.session.logueado = true;
-            req.session.usuario = {
+            const datosUsuario = {
                 id: usuario.intmatricula,
                 matricula: usuario.intmatricula,
                 nombre: usuario.vchnombre,
-                apellido_paterno: usuario.vchapaterno || '',
-                apellido_materno: usuario.vchamaterno || '',
                 apellidos,
                 nombre_completo: nombreCompleto,
                 correo: usuario.vchcorreo,
@@ -69,41 +56,19 @@ async function login(req, res) {
                 tipo_tabla: usuario.tipo_tabla
             };
 
-            if (recordar) {
-                req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-            }
+            const token = generarToken(datosUsuario);
 
-            req.session.save((err) => {
-                if (err) {
-                    return res.status(500).json({ success: false, message: 'Error al crear sesión' });
-                }
-
-                // Generar token JWT
-                const token = generarToken(req.session.usuario);
-
-                res.json({
-                    success: true,
-                    message: 'Inicio de sesión exitoso',
-                    token, // El frontend lo guarda en localStorage
-                    usuario: {
-                        id: usuario.intmatricula,
-                        matricula: usuario.intmatricula,
-                        nombre: usuario.vchnombre,
-                        apellidos,
-                        nombre_completo: nombreCompleto,
-                        correo: usuario.vchcorreo,
-                        rol: nombreRol,
-                        idrol: usuario.intidrol,
-                        tipo_tabla: usuario.tipo_tabla
-                    },
-                    redirect: '/HTML/index.html'
-                });
+            res.json({
+                success: true,
+                message: 'Inicio de sesión exitoso',
+                token,
+                usuario: datosUsuario,
+                redirect: '/HTML/index.html'
             });
         });
     });
 }
 
-// GET /api/auth/verificar
 // GET /api/auth/verificar
 function verificar(req, res) {
     if (!req.session || !req.session.logueado || !req.session.usuario) {
