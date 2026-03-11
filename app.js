@@ -13,10 +13,13 @@ const allowedOrigins = [
 ];
 
 app.use(cors({
-    origin: 'http://localhost:3000' || env.FRONTEND_URL, 
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true // Permite enviar cookies en solicitudes CORS
+    origin: [
+        'http://localhost:3000', 
+        process.env.FRONTEND_URL // Asegúrate de que esta variable esté configurada en Vercel
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
