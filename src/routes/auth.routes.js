@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { login, verificar, logout, getUsuarios, getAdministradores, getEmpleados, deleteUsuario, getPerfil, putPerfil, getUsuarioPorMatricula, getRoles, postActualizarUsuario } = require('../controllers/auth.controller');
+const { login, verificar, logout, getUsuarios, getAdministradores, getEmpleados, deleteUsuario, getPerfil, putPerfil, getUsuarioPorMatricula, getRoles, postActualizarUsuario, registro } = require('../controllers/auth.controller');
 const { verificarAutenticacion, verificarRolAdminEmpleado } = require('../middlewares/auth.middleware');
 
 router.post('/login', login);
@@ -22,5 +22,13 @@ router.post('/usuarios/actualizar', verificarAutenticacion, verificarRolAdminEmp
 router.get('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminEmpleado, getUsuarioPorMatricula);
 
 router.post('/registro', verificarAutenticacion, registro);
+
+module.exports = {
+    login, verificar, logout,
+    getUsuarios, getAdministradores, getEmpleados,
+    deleteUsuario, getPerfil, putPerfil,
+    getUsuarioPorMatricula, getRoles, postActualizarUsuario,
+    registro  // ← agregar
+};
 
 module.exports = router;

@@ -103,8 +103,8 @@ function postRegistrar(req, res) {
 
     const datos = {
         vchticket, intmatriculausuario, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones,
-        matriculaEmpleado: req.session.usuario.matricula,
-        idRol: req.session.usuario.idrol
+        matriculaEmpleado: req.usuario.matricula,
+        idRol: req.usuario.idrol
     };
 
     registrarPrestamo(datos, (error, resultado) => {

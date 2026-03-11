@@ -170,35 +170,21 @@ async function actualizarUsuario(datos, callback) {
 }
 
 
-const pool = require('../config/db');
-
-// Obtener la última matrícula de una tabla para generar la siguiente
+// En obtenerUltimaMatricula y registrarUsuario, cambia pool por conexion:
 function obtenerUltimaMatricula(tabla, callback) {
-    pool.query(`SELECT MAX(intmatricula) as ultima FROM ${tabla}`, callback);
+    conexion.query(`SELECT MAX(intmatricula) as ultima FROM ${tabla}`, callback);
 }
 
-// Registrar nuevo usuario en la tabla correspondiente
 function registrarUsuario(tabla, datos, callback) {
     const { matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol } = datos;
-    const sql = `INSERT INTO ${tabla} (intmatricula, vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    pool.query(sql, [matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono || null, vchcorreo, vchcalle || null, vchcolonia || null, vchpassword, intidrol], callback);
+    const sql = `INSERT INTO ${tabla} (intmatricula, vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    conexion.query(sql, [matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono || null, vchcorreo, vchcalle || null, vchcolonia || null, vchpassword, intidrol], callback);
 }
 
-
 module.exports = {
-    buscarUsuarioPorMatricula,
-    obtenerRolPorId,
-    verificarPassword,
-    hashearPassword,
-    obtenerUsuarios,
-    obtenerAdministradores,
-    obtenerEmpleados,
-    eliminarUsuario,
-    obtenerPerfil,
-    actualizarPerfil,
-    obtenerUsuarioPorMatricula,
-    obtenerRoles,
-    actualizarUsuario,
-     obtenerUltimaMatricula, registrarUsuario 
+    buscarUsuarioPorMatricula, obtenerRolPorId, verificarPassword, hashearPassword,
+    obtenerUsuarios, obtenerAdministradores, obtenerEmpleados,
+    eliminarUsuario, obtenerPerfil, actualizarPerfil,
+    obtenerUsuarioPorMatricula, obtenerRoles, actualizarUsuario,
+    obtenerUltimaMatricula, registrarUsuario
 };

@@ -12,7 +12,9 @@ const {
     actualizarPerfil,
     obtenerUsuarioPorMatricula,
     obtenerRoles,
-    actualizarUsuario
+    actualizarUsuario,
+    obtenerUltimaMatricula,  // ← agregar
+    registrarUsuario         // ← agregar
 } = require('../models/auth.model');
 
 // POST /api/auth/login
@@ -276,5 +278,5 @@ module.exports = {
     getUsuarios, getAdministradores, getEmpleados,
     deleteUsuario, getPerfil, putPerfil,
     getUsuarioPorMatricula, getRoles, postActualizarUsuario,
-    obtenerUltimaMatricula, registrarUsuario
+    registro  // ← solo esto, no obtenerUltimaMatricula ni registrarUsuario
 };
