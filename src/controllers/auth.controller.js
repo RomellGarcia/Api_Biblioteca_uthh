@@ -82,16 +82,6 @@ function verificar(req, res) {
     }
     res.json({ success: true, logged_in: true, usuario: req.session.usuario });
 }
-// POST /api/auth/logout
-function logout(req, res) {
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).json({ success: false, message: 'Error al cerrar sesión' });
-        }
-        res.clearCookie('connect.sid');
-        res.json({ success: true, message: 'Sesión cerrada correctamente', redirect: '/HTML/index.html' });
-    });
-}
 
 // GET /api/auth/usuarios
 function getUsuarios(req, res) {
@@ -132,12 +122,11 @@ function deleteUsuario(req, res) {
         res.json({ success: true, message: 'Usuario eliminado correctamente' });
     });
 }
-
 // GET /api/auth/perfil
 function getPerfil(req, res) {
-    const { matricula, idrol } = req.session.usuario;
+    const { matricula, idrol } = req.usuario;  // ← req.usuario
     const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
-    const tabla = tablasPorRol[idrol];
+    const tabla = tablasPorRol[parseInt(idrol)];
 
     if (!tabla) return res.status(400).json({ success: false, error: 'Rol no válido' });
 
@@ -150,9 +139,9 @@ function getPerfil(req, res) {
 
 // PUT /api/auth/perfil
 async function putPerfil(req, res) {
-    const { matricula, idrol } = req.session.usuario;
+    const { matricula, idrol } = req.usuario;  // ← req.usuario
     const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
-    const tabla = tablasPorRol[idrol];
+    const tabla = tablasPorRol[parseInt(idrol)];
 
     if (!tabla) return res.status(400).json({ success: false, mensaje: 'Rol no válido' });
 
@@ -163,7 +152,6 @@ async function putPerfil(req, res) {
 
     const campos = { ...req.body };
 
-    // Hashear nueva contraseña si se proporcionó
     if (vchpassword && vchpassword.trim() !== '') {
         campos.vchpassword = await hashearPassword(vchpassword);
     }
@@ -171,12 +159,13 @@ async function putPerfil(req, res) {
     actualizarPerfil(tabla, campos, matricula, (error, resultado) => {
         if (error) return res.status(500).json({ success: false, mensaje: 'Error al actualizar perfil' });
         if (resultado.affectedRows === 0) return res.json({ success: false, mensaje: 'No se pudo actualizar el perfil' });
-
-        req.session.usuario.nombre = vchnombre;
-        req.session.usuario.correo = vchcorreo;
-
         res.json({ success: true, mensaje: 'Perfil actualizado correctamente' });
     });
+}
+
+// POST /api/auth/logout
+function logout(req, res) {
+    res.json({ success: true, message: 'Sesión cerrada correctamente', redirect: '/HTML/iniciar_sesion.html' });
 }
 
 // GET /api/auth/usuarios/:matricula — obtener un usuario específico
