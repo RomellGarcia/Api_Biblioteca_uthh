@@ -9,7 +9,10 @@ const {
     obtenerEmpleados,
     eliminarUsuario,
     obtenerPerfil,
-    actualizarPerfil
+    actualizarPerfil,
+    obtenerUsuarioPorMatricula,
+    obtenerRoles,
+    actualizarUsuario
 } = require('../models/auth.model');
 
 // POST /api/auth/login
@@ -205,4 +208,54 @@ async function putPerfil(req, res) {
     });
 }
 
-module.exports = { login, verificar, logout, getUsuarios, getAdministradores, getEmpleados, deleteUsuario, getPerfil, putPerfil };
+// GET /api/auth/usuarios/:matricula — obtener un usuario específico
+function getUsuarioPorMatricula(req, res) {
+    const { matricula } = req.params;
+    const { tabla } = req.query;
+    const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
+
+    if (!tabla || !tablasPermitidas.includes(tabla)) {
+        return res.status(400).json({ success: false, error: 'Tabla no válida' });
+    }
+
+    obtenerUsuarioPorMatricula(tabla, matricula, (error, resultados) => {
+        if (error) return res.status(500).json({ success: false, error: 'Error al obtener usuario' });
+        if (resultados.length === 0) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        res.json({ success: true, data: resultados[0] });
+    });
+}
+
+// GET /api/auth/roles — obtener todos los roles
+function getRoles(req, res) {
+    obtenerRoles((error, resultados) => {
+        if (error) return res.status(500).json({ success: false, error: 'Error al obtener roles' });
+        res.json({ success: true, data: resultados });
+    });
+}
+
+// POST /api/auth/usuarios/actualizar — actualizar usuario por admin
+async function postActualizarUsuario(req, res) {
+    const { tabla } = req.body;
+    const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
+
+    if (!tabla || !tablasPermitidas.includes(tabla)) {
+        return res.status(400).json({ success: false, error: 'Tabla no válida' });
+    }
+
+    try {
+        actualizarUsuario(req.body, (error, resultado) => {
+            if (error) return res.status(500).json({ success: false, error: 'Error al actualizar usuario' });
+            if (resultado.affectedRows === 0) return res.json({ success: false, error: 'Usuario no encontrado' });
+            res.json({ success: true, message: 'Usuario actualizado correctamente' });
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al procesar la solicitud' });
+    }
+}
+
+module.exports = {
+    login, verificar, logout,
+    getUsuarios, getAdministradores, getEmpleados,
+    deleteUsuario, getPerfil, putPerfil,
+    getUsuarioPorMatricula, getRoles, postActualizarUsuario
+};

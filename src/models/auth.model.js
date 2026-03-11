@@ -120,6 +120,55 @@ function actualizarPerfil(tabla, campos, matricula, callback) {
     conexion.query(sql, params, callback);
 }
 
+// Obtener un usuario específico por matrícula y tabla
+function obtenerUsuarioPorMatricula(tabla, matricula, callback) {
+    const sql = `
+        SELECT intmatricula, vchnombre, vchapaterno, vchamaterno,
+               vchtelefono, vchcorreo, vchcalle, vchcolonia, intidrol
+        FROM ${tabla} WHERE intmatricula = ?
+    `;
+    conexion.query(sql, [matricula], callback);
+}
+
+// Obtener todos los roles
+function obtenerRoles(callback) {
+    const sql = "SELECT intidrol, vchrol FROM tblroles ORDER BY intidrol ASC";
+    conexion.query(sql, callback);
+}
+
+// Actualizar usuario por admin (cambia tabla, rol, datos y opcionalmente contraseña)
+async function actualizarUsuario(datos, callback) {
+    const {
+        matricula_original, tabla, intmatricula, intidrol,
+        vchnombre, vchapaterno, vchamaterno, vchtelefono,
+        vchcorreo, vchcalle, vchcolonia, password_nueva
+    } = datos;
+
+    let sql = `
+        UPDATE ${tabla} SET
+            intmatricula = ?, intidrol = ?, vchnombre = ?, vchapaterno = ?,
+            vchamaterno = ?, vchtelefono = ?, vchcorreo = ?,
+            vchcalle = ?, vchcolonia = ?
+    `;
+
+    const params = [
+        intmatricula, intidrol, vchnombre, vchapaterno || '',
+        vchamaterno || '', vchtelefono || '', vchcorreo,
+        vchcalle || '', vchcolonia || ''
+    ];
+
+    if (password_nueva && password_nueva.trim() !== '') {
+        const hash = await hashearPassword(password_nueva);
+        sql += ', vchpassword = ?';
+        params.push(hash);
+    }
+
+    sql += ' WHERE intmatricula = ?';
+    params.push(matricula_original);
+
+    conexion.query(sql, params, callback);
+}
+
 module.exports = {
     buscarUsuarioPorMatricula,
     obtenerRolPorId,
@@ -130,5 +179,8 @@ module.exports = {
     obtenerEmpleados,
     eliminarUsuario,
     obtenerPerfil,
-    actualizarPerfil
+    actualizarPerfil,
+    obtenerUsuarioPorMatricula,
+    obtenerRoles,
+    actualizarUsuario
 };

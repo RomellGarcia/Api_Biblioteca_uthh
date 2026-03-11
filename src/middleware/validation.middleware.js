@@ -1,5 +1,4 @@
 // validation.middleware.js - Middlewares de validación
-
 /**
  * Middleware para validar que existan campos requeridos en el body
  * @param {Array} camposRequeridos - Array de nombres de campos requeridos

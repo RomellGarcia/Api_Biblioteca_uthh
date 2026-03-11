@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { login, verificar, logout, getUsuarios, getAdministradores, getEmpleados, deleteUsuario, getPerfil, putPerfil } = require('../controllers/auth.controller');
+const { login, verificar, logout, getUsuarios, getAdministradores, getEmpleados, deleteUsuario, getPerfil, putPerfil, getUsuarioPorMatricula, getRoles, postActualizarUsuario } = require('../controllers/auth.controller');
 const { verificarAutenticacion, verificarRolAdminEmpleado } = require('../middlewares/auth.middleware');
 
 router.post('/login', login);
@@ -14,5 +14,11 @@ router.delete('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminE
 
 router.get('/perfil', verificarAutenticacion, getPerfil);
 router.put('/perfil', verificarAutenticacion, putPerfil);
+
+// Rutas de editar usuario (solo admin)
+router.get('/roles', verificarAutenticacion, verificarRolAdminEmpleado, getRoles);
+router.post('/usuarios/actualizar', verificarAutenticacion, verificarRolAdminEmpleado, postActualizarUsuario);
+// Esta ruta debe ir DESPUÉS de /usuarios/actualizar para no confundirse con el :matricula
+router.get('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminEmpleado, getUsuarioPorMatricula);
 
 module.exports = router;

@@ -23,7 +23,7 @@ conexion.connect((error) => {
         console.error('   3. La base de datos exista\n');
         process.exit(1);
     }
-    console.log('✅ Conectado a MySQL - Base de datos:', process.env.DB_NAME);
+    console.log('Conectado a MySQL - Base de datos:', process.env.DB_NAME);
 });
 
 // Manejar errores después de la conexión inicial
