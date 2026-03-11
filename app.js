@@ -7,7 +7,17 @@ const app = express();
 
 // Middlewares globales
 app.use(cors({
-    origin: process.env.FRONTEND_URL || '*',
+    origin: function(origin, callback) {
+        // Permitir sin origin (Postman, etc.) o cualquier localhost
+        if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+            return callback(null, true);
+        }
+        // Permitir el frontend de producción si está configurado
+        if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
+            return callback(null, true);
+        }
+        callback(new Error('No permitido por CORS'));
+    },
     credentials: true
 }));
 app.use(express.json());
