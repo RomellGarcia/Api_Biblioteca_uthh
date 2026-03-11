@@ -169,6 +169,23 @@ async function actualizarUsuario(datos, callback) {
     conexion.query(sql, params, callback);
 }
 
+
+const pool = require('../config/db');
+
+// Obtener la última matrícula de una tabla para generar la siguiente
+function obtenerUltimaMatricula(tabla, callback) {
+    pool.query(`SELECT MAX(intmatricula) as ultima FROM ${tabla}`, callback);
+}
+
+// Registrar nuevo usuario en la tabla correspondiente
+function registrarUsuario(tabla, datos, callback) {
+    const { matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol } = datos;
+    const sql = `INSERT INTO ${tabla} (intmatricula, vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    pool.query(sql, [matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono || null, vchcorreo, vchcalle || null, vchcolonia || null, vchpassword, intidrol], callback);
+}
+
+
 module.exports = {
     buscarUsuarioPorMatricula,
     obtenerRolPorId,
@@ -182,5 +199,6 @@ module.exports = {
     actualizarPerfil,
     obtenerUsuarioPorMatricula,
     obtenerRoles,
-    actualizarUsuario
+    actualizarUsuario,
+     obtenerUltimaMatricula, registrarUsuario 
 };

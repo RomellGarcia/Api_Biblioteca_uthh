@@ -213,9 +213,68 @@ async function postActualizarUsuario(req, res) {
     }
 }
 
+// POST /api/auth/registro
+async function registro(req, res) {
+    const { vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol } = req.body;
+
+    if (!vchnombre || !vchapaterno || !vchcorreo || !vchpassword || !intidrol) {
+        return res.status(400).json({ success: false, message: 'Faltan campos requeridos' });
+    }
+
+    const rol = parseInt(intidrol);
+    const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
+    const tabla = tablasPorRol[rol];
+
+    if (!tabla) {
+        return res.status(400).json({ success: false, message: 'Rol no válido' });
+    }
+
+    try {
+        const passwordHash = await hashearPassword(vchpassword);
+
+        obtenerUltimaMatricula(tabla, (error, resultados) => {
+            if (error) return res.status(500).json({ success: false, message: 'Error al generar matrícula' });
+
+            const ultimaMatricula = resultados[0].ultima || 10100000;
+            const nuevaMatricula = ultimaMatricula + 1;
+
+            const datos = {
+                matricula: nuevaMatricula,
+                vchnombre,
+                vchapaterno,
+                vchamaterno: vchamaterno || null,
+                vchtelefono: vchtelefono || null,
+                vchcorreo,
+                vchcalle: vchcalle || null,
+                vchcolonia: vchcolonia || null,
+                vchpassword: passwordHash,
+                intidrol: rol
+            };
+
+            registrarUsuario(tabla, datos, (errorReg, resultado) => {
+                if (errorReg) {
+                    if (errorReg.code === 'ER_DUP_ENTRY') {
+                        return res.status(409).json({ success: false, message: 'El correo ya está registrado' });
+                    }
+                    return res.status(500).json({ success: false, message: 'Error al registrar usuario' });
+                }
+
+                res.json({
+                    success: true,
+                    message: 'Usuario registrado correctamente',
+                    matricula: nuevaMatricula
+                });
+            });
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Error al procesar registro' });
+    }
+}
+
 module.exports = {
     login, verificar, logout,
     getUsuarios, getAdministradores, getEmpleados,
     deleteUsuario, getPerfil, putPerfil,
-    getUsuarioPorMatricula, getRoles, postActualizarUsuario
+    getUsuarioPorMatricula, getRoles, postActualizarUsuario,
+    obtenerUltimaMatricula, registrarUsuario
 };

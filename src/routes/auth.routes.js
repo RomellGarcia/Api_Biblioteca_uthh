@@ -21,4 +21,6 @@ router.post('/usuarios/actualizar', verificarAutenticacion, verificarRolAdminEmp
 // Esta ruta debe ir DESPUÉS de /usuarios/actualizar para no confundirse con el :matricula
 router.get('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminEmpleado, getUsuarioPorMatricula);
 
+router.post('/registro', verificarAutenticacion, registro);
+
 module.exports = router;
