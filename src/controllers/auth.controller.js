@@ -111,20 +111,22 @@ function getEmpleados(req, res) {
 
 // GET /api/auth/usuarios/todos
 function getTodosLosUsuarios(req, res) {
-    // Al llamar a tus funciones internas, no pasas nada externo
     obtenerUsuarios((err1, usuarios) => {
         obtenerAdministradores((err2, admins) => {
             obtenerEmpleados((err3, empleados) => {
-                if (err1 || err2 || err3) {
-                    return res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
-                }
-                const todos = [...(usuarios || []), ...(admins || []), ...(empleados || [])];
-                res.json({ success: true, data: todos });
+                // AGREGAMOS ESTO: obtener todos los roles
+                obtenerRoles((err4, roles) => {
+                    if (err1 || err2 || err3 || err4) {
+                        return res.status(500).json({ success: false, error: 'Error al obtener datos' });
+                    }
+                    const todos = [...(usuarios || []), ...(admins || []), ...(empleados || [])];
+                    // Enviamos usuarios y roles
+                    res.json({ success: true, data: todos, roles: roles || [] });
+                });
             });
         });
     });
 }
-
 // DELETE /api/auth/usuarios/:matricula
 function deleteUsuario(req, res) {
     const { matricula } = req.params;
