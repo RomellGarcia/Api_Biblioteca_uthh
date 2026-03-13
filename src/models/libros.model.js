@@ -164,14 +164,39 @@ function obtenerDetalle(folio, callback) {
         LEFT JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
         WHERE l.vchfolio = ?
     `;
+    
     conexion.query(sql, [folio], (error, resultados) => {
-        if (error) return callback(error, null);
-        if (resultados.length === 0) return callback(null, null);
-        const libro = {
-            ...resultados[0],
-            imagen: resultados[0].imagen ? procesarImagen(resultados[0].imagen) : null
-        };
-        callback(null, libro);
+        if (error) {
+            console.error("Error SQL en obtenerDetalle:", error);
+            return callback(error, null);
+        }
+        
+        if (!resultados || resultados.length === 0) {
+            return callback(null, null); // Libro no existe, devolvemos null
+        }
+
+        const data = resultados[0];
+        
+        try {
+            // Protección contra errores en el procesamiento de imagen
+            let imagenBase64 = null;
+            if (data.imagen) {
+                try {
+                    imagenBase64 = procesarImagen(data.imagen);
+                } catch (imgError) {
+                    console.error("Error procesando imagen para el folio " + folio, imgError);
+                }
+            }
+
+            const libro = {
+                ...data,
+                imagen: imagenBase64
+            };
+            callback(null, libro);
+        } catch (err) {
+            console.error("Error inesperado al mapear objeto:", err);
+            callback(err, null);
+        }
     });
 }
 

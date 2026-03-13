@@ -1,24 +1,28 @@
-const express = require('express');
-const session = require('express-session');
-const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
 
+const express = require('express');
+const session = require('express-session');
+const cors = require('cors');
+
+
 // 1. Configuración de CORS simplificada y robusta
 const allowedOrigins = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    process.env.FRONTEND_URL
+    'http://localhost:3000',      // Tu frontend (Live Server)
+    'http://127.0.0.1:3000',    // A veces Live Server usa esta IP
+    'http://localhost:5500',      // Por si acaso usas el puerto por defecto de Live Server
+    process.env.FRONTEND_URL      // Tu URL de producción
 ];
 
 app.use(cors({
     origin: [
         'http://localhost:3000', 
-        process.env.FRONTEND_URL 
+        'http://127.0.0.1:3000',
+        process.env.FRONTEND_URL || '' // Asegúrate que esta variable exista en tu .env
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true,
+    credentials: true, // Esto es lo que causa que el origen deba ser específico
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -57,7 +61,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => {
         console.log(`Servidor corriendo en puerto ${PORT}`);

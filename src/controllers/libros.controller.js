@@ -58,6 +58,7 @@ function getBuscar(req, res) {
 // GET /api/libros/detalle?folio=
 function getDetalle(req, res) {
     const folio = req.query.folio;
+    console.log("Buscando folio:", folio);
     if (!folio) return res.status(400).json({ success: false, error: 'Folio requerido' });
 
     obtenerDetalle(folio, (error, libro) => {
