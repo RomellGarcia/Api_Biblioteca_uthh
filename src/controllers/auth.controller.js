@@ -109,6 +109,24 @@ function getEmpleados(req, res) {
     });
 }
 
+// GET /api/auth/usuarios/todos
+async function getTodosLosUsuarios(req, res) {
+    try {
+        // Ejecuta las tres consultas en paralelo
+        const [usuarios, admins, empleados] = await Promise.all([
+            new Promise((resolve) => obtenerUsuarios( (err, data) => resolve(data || []))),
+            new Promise((resolve) => obtenerAdministradores( (err, data) => resolve(data || []))),
+            new Promise((resolve) => obtenerEmpleados( (err, data) => resolve(data || [])))
+        ]);
+
+        // Combina todo en un solo array
+        const todos = [...usuarios, ...admins, ...empleados];
+        res.json({ success: true, data: todos });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al consolidar usuarios' });
+    }
+}
+
 // DELETE /api/auth/usuarios/:matricula
 function deleteUsuario(req, res) {
     const { matricula } = req.params;
