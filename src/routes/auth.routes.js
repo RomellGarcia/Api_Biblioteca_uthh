@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { login, verificar, logout, getUsuarios, getAdministradores, getEmpleados, deleteUsuario, getPerfil, putPerfil, getUsuarioPorMatricula, getRoles, postActualizarUsuario, registro } = require('../controllers/auth.controller');
 const { verificarAutenticacion, verificarRolAdminEmpleado } = require('../middlewares/auth.middleware');
+const {getTodosLosUsuarios } = require('../controllers/auth.controller');
 
 router.post('/login', login);
 router.get('/verificar', verificar);
@@ -21,5 +22,8 @@ router.post('/usuarios/actualizar', verificarAutenticacion, verificarRolAdminEmp
 router.get('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminEmpleado, getUsuarioPorMatricula);
 
 router.post('/registro', verificarAutenticacion, registro);
+
+
+router.get('/usuarios/todos', verificarAutenticacion, verificarRolAdminEmpleado, getTodosLosUsuarios);
 
 module.exports = router;
