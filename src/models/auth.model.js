@@ -32,7 +32,7 @@ async function verificarPassword(passwordIngresado, passwordGuardado) {
     if (esBcrypt) {
         return await bcrypt.compare(passwordIngresado, passwordGuardado);
     }
-    // Fallback MD5 legacy (para cuentas antiguas)
+    // Fallback MD5 para cuentas antiguas)
     const crypto = require('crypto');
     const md5 = crypto.createHash('md5').update(passwordIngresado).digest('hex');
     return md5 === passwordGuardado;
@@ -111,7 +111,7 @@ function actualizarPerfil(tabla, campos, matricula, callback) {
 
     if (vchpassword && vchpassword.trim() !== '') {
         sql += ', vchpassword = ?';
-        params.push(vchpassword); // Ya viene hasheado desde el controller
+        params.push(vchpassword);
     }
 
     sql += ' WHERE intmatricula = ?';

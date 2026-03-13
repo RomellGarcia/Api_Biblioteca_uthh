@@ -13,8 +13,8 @@ const {
     obtenerUsuarioPorMatricula,
     obtenerRoles,
     actualizarUsuario,
-    obtenerUltimaMatricula,  // ← agregar
-    registrarUsuario         // ← agregar
+    obtenerUltimaMatricula,
+    registrarUsuario        
 } = require('../models/auth.model');
 
 // POST /api/auth/login

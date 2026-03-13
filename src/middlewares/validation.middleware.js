@@ -1,7 +1,6 @@
-// validation.middleware.js - Middlewares de validación
 /**
  * Middleware para validar que existan campos requeridos en el body
- * @param {Array} camposRequeridos - Array de nombres de campos requeridos
+ * @param {Array} camposRequeridos 
  */
 const validarCamposRequeridos = (camposRequeridos) => {
     return (req, res, next) => {
@@ -25,9 +24,7 @@ const validarCamposRequeridos = (camposRequeridos) => {
     };
 };
 
-/**
- * Middleware para validar formato de matrícula
- */
+//Middleware para validar formato de matrícula
 const validarMatricula = (req, res, next) => {
     const { matricula } = req.body;
 
@@ -46,19 +43,15 @@ const validarMatricula = (req, res, next) => {
             message: 'Matrícula inválida. Debe ser un número positivo'
         });
     }
-
-    // Normalizar la matrícula como número
     req.body.matricula = matriculaNum;
     next();
 };
 
-/**
- * Middleware para validar formato de email
- */
+// Middleware para validar formato de email
 const validarEmail = (req, res, next) => {
     const { vchcorreo } = req.body;
 
-    // Si no se proporciona email, continuar (es opcional en algunos casos)
+    // Si no se proporciona email, continuar
     if (!vchcorreo) {
         return next();
     }
@@ -75,9 +68,7 @@ const validarEmail = (req, res, next) => {
     next();
 };
 
-/**
- * Middleware para validar formato de fecha
- */
+//Middleware para validar formato de fecha
 const validarFecha = (nombreCampo) => {
     return (req, res, next) => {
         const fecha = req.body[nombreCampo];
@@ -102,9 +93,7 @@ const validarFecha = (nombreCampo) => {
     };
 };
 
-/**
- * Middleware para validar query params
- */
+//Middleware para validar query params
 const validarQueryParams = (paramsRequeridos) => {
     return (req, res, next) => {
         const paramsFaltantes = [];
