@@ -9,13 +9,13 @@ const app = express();
 const allowedOrigins = [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    process.env.FRONTEND_URL // Asegúrate de poner https://tu-frontend.vercel.app en tu .env
+    process.env.FRONTEND_URL
 ];
 
 app.use(cors({
     origin: [
         'http://localhost:3000', 
-        process.env.FRONTEND_URL // Asegúrate de que esta variable esté configurada en Vercel
+        process.env.FRONTEND_URL 
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
@@ -26,14 +26,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 2. Configuración de SESIÓN (Crucial para que no falle en Vercel)
-// Si usas sesiones, necesitas configurar las cookies para que el navegador las acepte entre dominios
 app.use(session({
     secret: process.env.SESSION_SECRET || 'tu_secreto_super_seguro',
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // true si es HTTPS (Vercel)
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' permite cross-site
+        secure: process.env.NODE_ENV === 'production', 
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', 
         maxAge: 1000 * 60 * 60 * 24 // 24 horas
     }
 }));
