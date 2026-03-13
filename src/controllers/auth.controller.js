@@ -111,15 +111,13 @@ function getEmpleados(req, res) {
 
 // GET /api/auth/usuarios/todos
 function getTodosLosUsuarios(req, res) {
-    // Usamos las funciones que ya tienes para obtener cada grupo
+    // Al llamar a tus funciones internas, no pasas nada externo
     obtenerUsuarios((err1, usuarios) => {
         obtenerAdministradores((err2, admins) => {
             obtenerEmpleados((err3, empleados) => {
                 if (err1 || err2 || err3) {
-                    console.error('Error al consultar usuarios:', err1, err2, err3);
                     return res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
                 }
-                // Combinamos los resultados en un solo array
                 const todos = [...(usuarios || []), ...(admins || []), ...(empleados || [])];
                 res.json({ success: true, data: todos });
             });

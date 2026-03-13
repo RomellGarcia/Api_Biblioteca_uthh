@@ -7,6 +7,7 @@ const {getTodosLosUsuarios } = require('../controllers/auth.controller');
 router.post('/login', login);
 router.get('/verificar', verificar);
 router.post('/logout', logout);
+router.get('/usuarios/todos', verificarAutenticacion, verificarRolAdminEmpleado, getTodosLosUsuarios);
 
 router.get('/usuarios', verificarAutenticacion, verificarRolAdminEmpleado, getUsuarios);
 router.get('/administradores', verificarAutenticacion, verificarRolAdminEmpleado, getAdministradores);
@@ -23,7 +24,5 @@ router.get('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminEmpl
 
 router.post('/registro', verificarAutenticacion, registro);
 
-
-router.get('/usuarios/todos', verificarAutenticacion, verificarRolAdminEmpleado, getTodosLosUsuarios);
 
 module.exports = router;
