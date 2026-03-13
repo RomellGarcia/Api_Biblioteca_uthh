@@ -18,10 +18,8 @@ router.put('/perfil', verificarAutenticacion, putPerfil);
 // Rutas de editar usuario (solo admin)
 router.get('/roles', verificarAutenticacion, verificarRolAdminEmpleado, getRoles);
 router.post('/usuarios/actualizar', verificarAutenticacion, verificarRolAdminEmpleado, postActualizarUsuario);
-// Esta ruta debe ir DESPUÉS de /usuarios/actualizar para no confundirse con el :matricula
 router.get('/usuarios/:matricula', verificarAutenticacion, verificarRolAdminEmpleado, getUsuarioPorMatricula);
 
 router.post('/registro', verificarAutenticacion, registro);
-
 
 module.exports = router;
