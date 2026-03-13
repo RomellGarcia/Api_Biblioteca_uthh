@@ -223,58 +223,60 @@ function buscarPorTicket(ticket, callback) {
     `;
     conexion.query(sql, [ticket], callback);
 }
-
 // Registrar devolución (con transacción)
+// Registrar devolución (corregido con conexión dedicada al pool)
 function registrarDevolucion(datos, callback) {
     const { intidprestamo, intidejemplar, intmatricula_empleado, vchentrega, fechareal_devolucion, vchsancion, flmontosancion, boolsancion } = datos;
 
-    conexion.beginTransaction(error => {
-        if (error) return callback(error, null);
+    // 1. SOLICITAR UNA CONEXIÓN DEDICADA AL POOL
+    conexion.getConnection((err, conn) => {
+        if (err) return callback(err, null);
 
-        // Verificar que el préstamo existe y no fue devuelto
-        conexion.query("SELECT booldevuelto FROM tblprestamos WHERE intidprestamo = ?", [intidprestamo], (errorV, resV) => {
-            if (errorV || resV.length === 0) {
-                return conexion.rollback(() => callback(null, { ok: false, mensaje: 'Préstamo no encontrado' }));
-            }
-            if (resV[0].booldevuelto == 1) {
-                return conexion.rollback(() => callback(null, { ok: false, mensaje: 'Este préstamo ya fue devuelto anteriormente' }));
+        // 2. INICIAR TRANSACCIÓN EN ESA CONEXIÓN ('conn')
+        conn.beginTransaction(error => {
+            if (error) {
+                conn.release();
+                return callback(error, null);
             }
 
-            // Obtener ID estado entrega
-            conexion.query("SELECT intidestrega FROM tblestadoentrega WHERE vchestadoentrega = ?", [vchentrega], (errorE, resE) => {
-                let intidestrega = null;
-                if (resE && resE.length > 0) {
-                    intidestrega = resE[0].intidestrega;
-                } else {
-                    if (vchentrega === 'Bueno') intidestrega = 1;
-                    else if (vchentrega === 'Regular') intidestrega = 2;
-                    else if (vchentrega === 'Mal') intidestrega = 3;
+            // 3. USAR 'conn.query' PARA TODAS LAS CONSULTAS
+            conn.query("SELECT booldevuelto FROM tblprestamos WHERE intidprestamo = ?", [intidprestamo], (errorV, resV) => {
+                if (errorV || resV.length === 0) {
+                    return conn.rollback(() => { conn.release(); callback(null, { ok: false, mensaje: 'Préstamo no encontrado' }); });
+                }
+                if (resV[0].booldevuelto == 1) {
+                    return conn.rollback(() => { conn.release(); callback(null, { ok: false, mensaje: 'Este préstamo ya fue devuelto' }); });
                 }
 
-                const montoSancion = flmontosancion ? parseFloat(flmontosancion) : 0;
-                const sancionCumplida = boolsancion ? 1 : 0;
+                // Obtener ID estado entrega
+                conn.query("SELECT intidestrega FROM tblestadoentrega WHERE vchestadoentrega = ?", [vchentrega], (errorE, resE) => {
+                    let intidestrega = (resE && resE.length > 0) ? resE[0].intidestrega : 
+                                       (vchentrega === 'Bueno' ? 1 : vchentrega === 'Regular' ? 2 : 3);
 
-                // Insertar devolución
-                const sqlDev = `
-                    INSERT INTO tbldevolucion 
-                    (intidprestamo, fechareal_devolucion, intmatricula_empleado, 
-                     vchsancion, flmontosancion, boolsancion, intidestrega)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `;
-                conexion.query(sqlDev, [intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion || null, montoSancion, sancionCumplida, intidestrega], (errorD, resD) => {
-                    if (errorD) return conexion.rollback(() => callback(errorD, null));
+                    const montoSancion = flmontosancion ? parseFloat(flmontosancion) : 0;
+                    const sancionCumplida = boolsancion ? 1 : 0;
 
-                    // Marcar préstamo como devuelto
-                    conexion.query("UPDATE tblprestamos SET booldevuelto = 1 WHERE intidprestamo = ?", [intidprestamo], (errorUP) => {
-                        if (errorUP) return conexion.rollback(() => callback(errorUP, null));
+                    // Insertar devolución
+                    const sqlDev = `INSERT INTO tbldevolucion (intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion, flmontosancion, boolsancion, intidestrega) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+                    
+                    conn.query(sqlDev, [intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion || null, montoSancion, sancionCumplida, intidestrega], (errorD, resD) => {
+                        if (errorD) return conn.rollback(() => { conn.release(); callback(errorD, null); });
 
-                        // Liberar ejemplar
-                        conexion.query("UPDATE tblejemplares SET booldisponible = 1 WHERE intidejemplar = ?", [intidejemplar], (errorUE) => {
-                            if (errorUE) return conexion.rollback(() => callback(errorUE, null));
+                        // Marcar préstamo como devuelto
+                        conn.query("UPDATE tblprestamos SET booldevuelto = 1 WHERE intidprestamo = ?", [intidprestamo], (errorUP) => {
+                            if (errorUP) return conn.rollback(() => { conn.release(); callback(errorUP, null); });
 
-                            conexion.commit(errorC => {
-                                if (errorC) return conexion.rollback(() => callback(errorC, null));
-                                callback(null, { ok: true, iddevolucion: resD.insertId, montoSancion });
+                            // Liberar ejemplar
+                            conn.query("UPDATE tblejemplares SET booldisponible = 1 WHERE intidejemplar = ?", [intidejemplar], (errorUE) => {
+                                if (errorUE) return conn.rollback(() => { conn.release(); callback(errorUE, null); });
+
+                                // Finalizar transacción
+                                conn.commit(errorC => {
+                                    if (errorC) return conn.rollback(() => { conn.release(); callback(errorC, null); });
+                                    
+                                    conn.release(); // Éxito: liberar la conexión al pool
+                                    callback(null, { ok: true, iddevolucion: resD.insertId, montoSancion });
+                                });
                             });
                         });
                     });
