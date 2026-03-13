@@ -116,6 +116,7 @@ function getTodosLosUsuarios(req, res) {
         obtenerAdministradores((err2, admins) => {
             obtenerEmpleados((err3, empleados) => {
                 if (err1 || err2 || err3) {
+                    console.error('Error al consultar usuarios:', err1, err2, err3);
                     return res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
                 }
                 // Combinamos los resultados en un solo array
