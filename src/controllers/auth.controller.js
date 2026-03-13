@@ -110,21 +110,20 @@ function getEmpleados(req, res) {
 }
 
 // GET /api/auth/usuarios/todos
-async function getTodosLosUsuarios(req, res) {
-    try {
-        // Ejecuta las tres consultas en paralelo
-        const [usuarios, admins, empleados] = await Promise.all([
-            new Promise((resolve) => obtenerUsuarios( (err, data) => resolve(data || []))),
-            new Promise((resolve) => obtenerAdministradores( (err, data) => resolve(data || []))),
-            new Promise((resolve) => obtenerEmpleados( (err, data) => resolve(data || [])))
-        ]);
-
-        // Combina todo en un solo array
-        const todos = [...usuarios, ...admins, ...empleados];
-        res.json({ success: true, data: todos });
-    } catch (error) {
-        res.status(500).json({ success: false, error: 'Error al consolidar usuarios' });
-    }
+function getTodosLosUsuarios(req, res) {
+    // Usamos las funciones que ya tienes para obtener cada grupo
+    obtenerUsuarios((err1, usuarios) => {
+        obtenerAdministradores((err2, admins) => {
+            obtenerEmpleados((err3, empleados) => {
+                if (err1 || err2 || err3) {
+                    return res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+                }
+                // Combinamos los resultados en un solo array
+                const todos = [...(usuarios || []), ...(admins || []), ...(empleados || [])];
+                res.json({ success: true, data: todos });
+            });
+        });
+    });
 }
 
 // DELETE /api/auth/usuarios/:matricula
@@ -297,5 +296,6 @@ module.exports = {
     deleteUsuario, getPerfil, putPerfil,
     getUsuarioPorMatricula, getRoles, postActualizarUsuario,
     obtenerUltimaMatricula, registrarUsuario,
+    getTodosLosUsuarios,
     registro
 };
