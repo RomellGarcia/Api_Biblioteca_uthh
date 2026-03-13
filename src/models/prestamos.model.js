@@ -134,48 +134,64 @@ function generarTicket(callback) {
 function registrarPrestamo(datos, callback) {
     const { vchticket, intmatriculausuario, matriculaEmpleado, idRol, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones } = datos;
 
-    conexion.beginTransaction(error => {
-        if (error) return callback(error, null);
+    // 1. SOLICITAR UNA CONEXIÓN ESPECÍFICA AL POOL
+    conexion.getConnection((err, conn) => {
+        if (err) return callback(err, null);
 
-        // Verificar que el usuario existe
-        conexion.query("SELECT intmatricula FROM tblusuarios WHERE intmatricula = ?", [intmatriculausuario], (errorU, resU) => {
-            if (errorU || resU.length === 0) {
-                return conexion.rollback(() => callback(null, { ok: false, mensaje: `El usuario con matrícula ${intmatriculausuario} no existe` }));
+        // 2. INICIAR TRANSACCIÓN EN LA CONEXIÓN OBTENIDA
+        conn.beginTransaction(error => {
+            if (error) {
+                conn.release(); // Liberar si falla el inicio
+                return callback(error, null);
             }
 
-            // Verificar que el empleado existe en su tabla
-            const tablaEmpleado = idRol === 1 ? 'tbladministrador' : 'tblempleados';
-            conexion.query(`SELECT intmatricula FROM ${tablaEmpleado} WHERE intmatricula = ?`, [matriculaEmpleado], (errorE, resE) => {
-                if (errorE || resE.length === 0) {
-                    const tipo = idRol === 1 ? 'administrador' : 'empleado';
-                    return conexion.rollback(() => callback(null, { ok: false, mensaje: `La matrícula ${matriculaEmpleado} no existe en la tabla de ${tipo}s` }));
+            // 3. USAR 'conn.query' PARA TODAS LAS OPERACIONES DE LA TRANSACCIÓN
+            conn.query("SELECT intmatricula FROM tblusuarios WHERE intmatricula = ?", [intmatriculausuario], (errorU, resU) => {
+                if (errorU || resU.length === 0) {
+                    return conn.rollback(() => {
+                        conn.release();
+                        callback(null, { ok: false, mensaje: `El usuario con matrícula ${intmatriculausuario} no existe` });
+                    });
                 }
 
-                // Verificar disponibilidad del ejemplar
-                conexion.query("SELECT booldisponible FROM tblejemplares WHERE intidejemplar = ?", [intidejemplar], (errorV, resV) => {
-                    if (errorV || resV.length === 0 || resV[0].booldisponible != 1) {
-                        return conexion.rollback(() => callback(null, { ok: false, mensaje: 'El ejemplar ya no está disponible' }));
+                const tablaEmpleado = idRol === 1 ? 'tbladministrador' : 'tblempleados';
+                conn.query(`SELECT intmatricula FROM ${tablaEmpleado} WHERE intmatricula = ?`, [matriculaEmpleado], (errorE, resE) => {
+                    if (errorE || resE.length === 0) {
+                        const tipo = idRol === 1 ? 'administrador' : 'empleado';
+                        return conn.rollback(() => {
+                            conn.release();
+                            callback(null, { ok: false, mensaje: `La matrícula ${matriculaEmpleado} no existe en la tabla de ${tipo}s` });
+                        });
                     }
 
-                    // Insertar préstamo
-                    const sqlPrestamo = `
-                        INSERT INTO tblprestamos 
-                        (vchticket, intmatricula_usuario, intmatricula_empleado, 
-                         fecha_prestamo, fecha_devolucion, booldevuelto, intidejemplar, vchobservaciones)
-                        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-                    `;
-                    conexion.query(sqlPrestamo, [vchticket, intmatriculausuario, matriculaEmpleado, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones || null], (errorP, resP) => {
-                        if (errorP) {
-                            return conexion.rollback(() => callback(errorP, null));
+                    conn.query("SELECT booldisponible FROM tblejemplares WHERE intidejemplar = ?", [intidejemplar], (errorV, resV) => {
+                        if (errorV || resV.length === 0 || resV[0].booldisponible != 1) {
+                            return conn.rollback(() => {
+                                conn.release();
+                                callback(null, { ok: false, mensaje: 'El ejemplar ya no está disponible' });
+                            });
                         }
 
-                        // Marcar ejemplar como no disponible
-                        conexion.query("UPDATE tblejemplares SET booldisponible = 0 WHERE intidejemplar = ?", [intidejemplar], (errorA) => {
-                            if (errorA) return conexion.rollback(() => callback(errorA, null));
+                        const sqlPrestamo = `
+                            INSERT INTO tblprestamos 
+                            (vchticket, intmatricula_usuario, intmatricula_empleado, 
+                             fecha_prestamo, fecha_devolucion, booldevuelto, intidejemplar, vchobservaciones)
+                            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+                        `;
+                        conn.query(sqlPrestamo, [vchticket, intmatriculausuario, matriculaEmpleado, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones || null], (errorP, resP) => {
+                            if (errorP) {
+                                return conn.rollback(() => { conn.release(); callback(errorP, null); });
+                            }
 
-                            conexion.commit(errorC => {
-                                if (errorC) return conexion.rollback(() => callback(errorC, null));
-                                callback(null, { ok: true, idprestamo: resP.insertId, ticket: vchticket });
+                            conn.query("UPDATE tblejemplares SET booldisponible = 0 WHERE intidejemplar = ?", [intidejemplar], (errorA) => {
+                                if (errorA) return conn.rollback(() => { conn.release(); callback(errorA, null); });
+
+                                conn.commit(errorC => {
+                                    if (errorC) return conn.rollback(() => { conn.release(); callback(errorC, null); });
+                                    
+                                    conn.release(); // Éxito: liberar la conexión
+                                    callback(null, { ok: true, idprestamo: resP.insertId, ticket: vchticket });
+                                });
                             });
                         });
                     });
