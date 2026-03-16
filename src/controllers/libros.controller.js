@@ -1,4 +1,4 @@
-const {
+import {
     obtenerLibrosRecomendados,
     obtenerCategorias,
     obtenerLibrosMasPedidos,
@@ -6,80 +6,108 @@ const {
     buscarLibros,
     obtenerDetalle,
     obtenerPorCategoria
-} = require('../models/libros.model');
+} from '../models/libros.model.js';
 
 // GET /api/libros/recomendados/aleatorios
-function getRecomendados(req, res) {
-    obtenerLibrosRecomendados((error, libros) => {
-        if (error) {
-            return res.status(500).json({ success: false, error: 'Error de base de datos: ' + error.message, codigo: error.code });
-        }
-        res.json({ success: true, data: libros, total: libros.length });
-    });
+async function getRecomendados(req, res) {
+    try {
+        const libros = await obtenerLibrosRecomendados();
+        res.json({ success: true, data: libros, total: libros?.length || 0 });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error de base de datos: ' + error.message, codigo: error.code });
+    }
 }
 
 // GET /api/libros/categorias
-function getCategorias(req, res) {
-    obtenerCategorias((error, categorias) => {
-        if (error) return res.status(500).json({ success: false, error: error.message });
+async function getCategorias(req, res) {
+    try {
+        const categorias = await obtenerCategorias();
         res.json({ success: true, data: categorias });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 }
 
 // GET /api/libros/mas-pedidos
-function getMasPedidos(req, res) {
-    obtenerLibrosMasPedidos((error, libros) => {
-        if (error) return res.status(500).json({ success: false, error: error.message });
+async function getMasPedidos(req, res) {
+    try {
+        const libros = await obtenerLibrosMasPedidos();
         res.json({ success: true, data: libros });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 }
 
 // GET /api/libros
-function getCatalogo(req, res) {
-    obtenerCatalogo((error, libros) => {
-        if (error) {
-            return res.status(500).json({ success: false, error: 'Error al obtener el catálogo', detalles: error.message });
-        }
-        res.json({ success: true, data: libros, total: libros.length });
-    });
+async function getCatalogo(req, res) {
+    try {
+        const libros = await obtenerCatalogo();
+        res.json({ success: true, data: libros, total: libros?.length || 0 });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener el catálogo', detalles: error.message });
+    }
 }
 
 // GET /api/libros/buscar?q=
-function getBuscar(req, res) {
+async function getBuscar(req, res) {
     const q = req.query.q;
     if (!q) return res.status(400).json({ success: false, error: 'Parámetro de búsqueda requerido' });
 
-    buscarLibros(q, (error, libros) => {
-        if (error) return res.status(500).json({ success: false, error: error.message });
+    try {
+        const libros = await buscarLibros(q);
         res.json({ success: true, data: libros });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 }
 
 // GET /api/libros/detalle?folio=
-function getDetalle(req, res) {
+async function getDetalle(req, res) {
     const folio = req.query.folio;
     console.log("Buscando folio:", folio);
     if (!folio) return res.status(400).json({ success: false, error: 'Folio requerido' });
 
-    obtenerDetalle(folio, (error, libro) => {
-        if (error) return res.status(500).json({ success: false, error: error.message });
-        if (!libro) return res.status(404).json({ success: false, error: 'Libro no encontrado' });
-        res.json({ success: true, data: libro });
-    });
+    try {
+        const libro = await obtenerDetalle(folio);
+        
+        // Validamos si no existe o si es un arreglo vacío
+        if (!libro || (Array.isArray(libro) && libro.length === 0)) {
+            return res.status(404).json({ success: false, error: 'Libro no encontrado' });
+        }
+        
+        // Si el modelo devuelve un arreglo, sacamos el primer elemento
+        const datosLibro = Array.isArray(libro) ? libro[0] : libro;
+        res.json({ success: true, data: datosLibro });
+        
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 }
 
 // GET /api/libros/categoria/:id
-function getCategoria(req, res) {
+async function getCategoria(req, res) {
     const categoriaId = parseInt(req.params.id);
     if (isNaN(categoriaId) || categoriaId <= 0) {
         return res.status(400).json({ success: false, error: 'ID de categoría inválido' });
     }
 
-    obtenerPorCategoria(categoriaId, (error, data) => {
-        if (error) return res.status(500).json({ success: false, error: error.message });
-        if (!data) return res.status(404).json({ success: false, error: 'Categoría no encontrada' });
+    try {
+        const data = await obtenerPorCategoria(categoriaId);
+        if (!data || (Array.isArray(data) && data.length === 0)) {
+            return res.status(404).json({ success: false, error: 'Categoría no encontrada o sin libros' });
+        }
         res.json({ success: true, data });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
 }
 
-module.exports = { getRecomendados, getCategorias, getMasPedidos, getCatalogo, getBuscar, getDetalle, getCategoria };
+export { 
+    getRecomendados, 
+    getCategorias, 
+    getMasPedidos, 
+    getCatalogo, 
+    getBuscar, 
+    getDetalle, 
+    getCategoria 
+};

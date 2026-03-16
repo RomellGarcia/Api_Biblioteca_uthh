@@ -1,5 +1,6 @@
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
@@ -19,9 +20,9 @@ function generarToken(usuario) {
     );
 }
 
-// Verificar y decodificar token JWT
+// Verificar y decodificar
 function verificarToken(token) {
     return jwt.verify(token, JWT_SECRET);
 }
 
-module.exports = { generarToken, verificarToken };
+export { generarToken, verificarToken };

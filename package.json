@@ -1,19 +1,25 @@
 {
   "name": "api_biblioteca_uthh",
   "version": "1.0.0",
-  "description": "",
+  "description": "API para el sistema de biblioteca UTHH",
   "main": "app.js",
+  "type": "module",
   "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/RomellGarcia/Api_Biblioteca_uthh.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "api",
+    "biblioteca",
+    "uthh"
+  ],
+  "author": "Romell Garcia",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/RomellGarcia/Api_Biblioteca_uthh/issues"
   },

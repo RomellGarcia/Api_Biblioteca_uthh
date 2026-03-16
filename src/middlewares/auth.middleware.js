@@ -1,11 +1,12 @@
-const { verificarToken } = require('../config/jwt');
+import { verificarToken } from '../config/jwt.js';
 
 function verificarAutenticacion(req, res, next) {
     const authHeader = req.headers['authorization'];
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({
             success: false,
-            error: 'Token no proporcionado'
+            error: 'Token no proporcionado o formato inválido'
         });
     }
 
@@ -13,9 +14,8 @@ function verificarAutenticacion(req, res, next) {
 
     try {
         const decoded = verificarToken(token);
-        req.usuario = decoded;
-        req.session = req.session || {};
-        req.session.usuario = decoded;
+        req.usuario = decoded; 
+
         next();
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
@@ -32,7 +32,16 @@ function verificarAutenticacion(req, res, next) {
 }
 
 function verificarRolAdminEmpleado(req, res, next) {
+    // Nos aseguramos de que el usuario exista 
+    if (!req.usuario) {
+        return res.status(401).json({
+            success: false,
+            error: 'Usuario no autenticado'
+        });
+    }
+
     const idRol = parseInt(req.usuario.idrol);
+    // Verificamos si es Administrador (1) o Empleado (2)
     if (idRol !== 1 && idRol !== 2) {
         return res.status(403).json({
             success: false,
@@ -42,4 +51,4 @@ function verificarRolAdminEmpleado(req, res, next) {
     next();
 }
 
-module.exports = { verificarAutenticacion, verificarRolAdminEmpleado };
+export { verificarAutenticacion, verificarRolAdminEmpleado };

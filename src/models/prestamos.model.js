@@ -1,7 +1,7 @@
-const conexion = require('../config/db');
+import conexion from '../config/db.js';
 
 // Obtener todos los préstamos con filtros opcionales
-function obtenerPrestamos(filtro, busqueda, callback) {
+async function obtenerPrestamos(filtro, busqueda) {
     let sql = `
         SELECT 
             p.intidprestamo, p.vchticket, p.intmatricula_usuario, p.intmatricula_empleado,
@@ -62,11 +62,13 @@ function obtenerPrestamos(filtro, busqueda, callback) {
     }
 
     sql += " ORDER BY p.fecha_prestamo DESC";
-    conexion.query(sql, params, callback);
+    
+    const [resultados] = await conexion.query(sql, params);
+    return resultados;
 }
 
 // Buscar ejemplares disponibles por término
-function buscarEjemplares(termino, callback) {
+async function buscarEjemplares(termino) {
     const t = `%${termino}%`;
     const sql = `
         SELECT 
@@ -89,11 +91,12 @@ function buscarEjemplares(termino, callback) {
              c.vchcategoria LIKE ?)
         ORDER BY l.vchtitulo ASC LIMIT 50
     `;
-    conexion.query(sql, [t, t, t, t, t, t, t], callback);
+    const [resultados] = await conexion.query(sql, [t, t, t, t, t, t, t]);
+    return resultados;
 }
 
 // Buscar usuario por matrícula con sus préstamos pendientes
-function buscarUsuarioConPrestamos(matricula, callback) {
+async function buscarUsuarioConPrestamos(matricula) {
     const sql = `
         SELECT u.intmatricula, u.vchnombre, u.vchapaterno, u.vchamaterno,
                u.vchcorreo, u.vchtelefono, r.vchrol
@@ -101,111 +104,96 @@ function buscarUsuarioConPrestamos(matricula, callback) {
         LEFT JOIN tblroles r ON u.intidrol = r.intidrol
         WHERE u.intmatricula = ?
     `;
-    conexion.query(sql, [matricula], (error, resultados) => {
-        if (error) return callback(error, null);
-        if (resultados.length === 0) return callback(null, null);
+    const [resultados] = await conexion.query(sql, [matricula]);
+    
+    if (resultados.length === 0) return null;
 
-        const usuario = resultados[0];
-        const sqlPendientes = "SELECT COUNT(*) as pendientes FROM tblprestamos WHERE intmatricula_usuario = ? AND booldevuelto = 0";
-        conexion.query(sqlPendientes, [matricula], (errorP, resPendientes) => {
-            usuario.prestamos_pendientes = resPendientes && resPendientes[0] ? resPendientes[0].pendientes : 0;
-            callback(null, usuario);
-        });
-    });
+    const usuario = resultados[0];
+    const sqlPendientes = "SELECT COUNT(*) as pendientes FROM tblprestamos WHERE intmatricula_usuario = ? AND booldevuelto = 0";
+    const [resPendientes] = await conexion.query(sqlPendientes, [matricula]);
+    
+    usuario.prestamos_pendientes = resPendientes && resPendientes[0] ? resPendientes[0].pendientes : 0;
+    return usuario;
 }
 
 // Generar ticket único
-function generarTicket(callback) {
+async function generarTicket() {
     const anio = new Date().getFullYear();
     const sql = "SELECT vchticket FROM tblprestamos WHERE vchticket LIKE ? ORDER BY intidprestamo DESC LIMIT 1";
-    conexion.query(sql, [`TK-${anio}-%`], (error, resultados) => {
-        if (error) return callback(error, null);
-        let numero = 1;
-        if (resultados.length > 0) {
-            const partes = resultados[0].vchticket.split('-');
-            numero = parseInt(partes[partes.length - 1]) + 1;
-        }
-        const ticket = `TK-${anio}-${String(numero).padStart(3, '0')}`;
-        callback(null, ticket);
-    });
+    const [resultados] = await conexion.query(sql, [`TK-${anio}-%`]);
+    
+    let numero = 1;
+    if (resultados.length > 0) {
+        const partes = resultados[0].vchticket.split('-');
+        numero = parseInt(partes[partes.length - 1]) + 1;
+    }
+    return `TK-${anio}-${String(numero).padStart(3, '0')}`;
 }
 
 // Registrar nuevo préstamo (con transacción)
-function registrarPrestamo(datos, callback) {
+async function registrarPrestamo(datos) {
     const { vchticket, intmatriculausuario, matriculaEmpleado, idRol, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones } = datos;
+    const conn = await conexion.getConnection();
+    
+    try {
+        await conn.beginTransaction();
 
-    // 1. SOLICITAR UNA CONEXIÓN ESPECÍFICA AL POOL
-    conexion.getConnection((err, conn) => {
-        if (err) return callback(err, null);
-        conn.beginTransaction(error => {
-            if (error) {
-                conn.release();
-                return callback(error, null);
-            }
+        // Verificar usuario
+        const [resU] = await conn.query("SELECT intmatricula FROM tblusuarios WHERE intmatricula = ?", [intmatriculausuario]);
+        if (resU.length === 0) {
+            await conn.rollback();
+            return { ok: false, mensaje: `El usuario con matrícula ${intmatriculausuario} no existe` };
+        }
 
-            conn.query("SELECT intmatricula FROM tblusuarios WHERE intmatricula = ?", [intmatriculausuario], (errorU, resU) => {
-                if (errorU || resU.length === 0) {
-                    return conn.rollback(() => {
-                        conn.release();
-                        callback(null, { ok: false, mensaje: `El usuario con matrícula ${intmatriculausuario} no existe` });
-                    });
-                }
+        // Verificar empleado/admin
+        const tablaEmpleado = idRol === 1 ? 'tbladministrador' : 'tblempleados';
+        const [resE] = await conn.query(`SELECT intmatricula FROM ${tablaEmpleado} WHERE intmatricula = ?`, [matriculaEmpleado]);
+        if (resE.length === 0) {
+            const tipo = idRol === 1 ? 'administrador' : 'empleado';
+            await conn.rollback();
+            return { ok: false, mensaje: `La matrícula ${matriculaEmpleado} no existe en la tabla de ${tipo}s` };
+        }
 
-                const tablaEmpleado = idRol === 1 ? 'tbladministrador' : 'tblempleados';
-                conn.query(`SELECT intmatricula FROM ${tablaEmpleado} WHERE intmatricula = ?`, [matriculaEmpleado], (errorE, resE) => {
-                    if (errorE || resE.length === 0) {
-                        const tipo = idRol === 1 ? 'administrador' : 'empleado';
-                        return conn.rollback(() => {
-                            conn.release();
-                            callback(null, { ok: false, mensaje: `La matrícula ${matriculaEmpleado} no existe en la tabla de ${tipo}s` });
-                        });
-                    }
+        // Verificar disponibilidad del ejemplar
+        const [resV] = await conn.query("SELECT booldisponible FROM tblejemplares WHERE intidejemplar = ?", [intidejemplar]);
+        if (resV.length === 0 || resV[0].booldisponible != 1) {
+            await conn.rollback();
+            return { ok: false, mensaje: 'El ejemplar ya no está disponible' };
+        }
 
-                    conn.query("SELECT booldisponible FROM tblejemplares WHERE intidejemplar = ?", [intidejemplar], (errorV, resV) => {
-                        if (errorV || resV.length === 0 || resV[0].booldisponible != 1) {
-                            return conn.rollback(() => {
-                                conn.release();
-                                callback(null, { ok: false, mensaje: 'El ejemplar ya no está disponible' });
-                            });
-                        }
+        // Insertar préstamo
+        const sqlPrestamo = `
+            INSERT INTO tblprestamos 
+            (vchticket, intmatricula_usuario, intmatricula_empleado, 
+             fecha_prestamo, fecha_devolucion, booldevuelto, intidejemplar, vchobservaciones)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+        `;
+        const [resP] = await conn.query(sqlPrestamo, [vchticket, intmatriculausuario, matriculaEmpleado, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones || null]);
 
-                        const sqlPrestamo = `
-                            INSERT INTO tblprestamos 
-                            (vchticket, intmatricula_usuario, intmatricula_empleado, 
-                             fecha_prestamo, fecha_devolucion, booldevuelto, intidejemplar, vchobservaciones)
-                            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-                        `;
-                        conn.query(sqlPrestamo, [vchticket, intmatriculausuario, matriculaEmpleado, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones || null], (errorP, resP) => {
-                            if (errorP) {
-                                return conn.rollback(() => { conn.release(); callback(errorP, null); });
-                            }
+        // Actualizar ejemplar a no disponible
+        await conn.query("UPDATE tblejemplares SET booldisponible = 0 WHERE intidejemplar = ?", [intidejemplar]);
 
-                            conn.query("UPDATE tblejemplares SET booldisponible = 0 WHERE intidejemplar = ?", [intidejemplar], (errorA) => {
-                                if (errorA) return conn.rollback(() => { conn.release(); callback(errorA, null); });
+        // Si todo sale bien confirmamos la transacción
+        await conn.commit();
+        return { ok: true, idprestamo: resP.insertId, ticket: vchticket };
 
-                                conn.commit(errorC => {
-                                    if (errorC) return conn.rollback(() => { conn.release(); callback(errorC, null); });
-
-                                    conn.release(); // Éxito: liberar la conexión
-                                    callback(null, { ok: true, idprestamo: resP.insertId, ticket: vchticket });
-                                });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    });
+    } catch (error) {
+        await conn.rollback();
+        throw error;
+    } finally {
+        conn.release();
+    }
 }
 
 // Marcar sanción como pagada
-function pagarSancion(intiddevolucion, callback) {
+async function pagarSancion(intiddevolucion) {
     const sql = "UPDATE tbldevolucion SET boolsancion = 1 WHERE intiddevolucion = ?";
-    conexion.query(sql, [intiddevolucion], callback);
+    const [resultado] = await conexion.query(sql, [intiddevolucion]);
+    return resultado;
 }
 
 // Buscar préstamo por ticket
-function buscarPorTicket(ticket, callback) {
+async function buscarPorTicket(ticket) {
     const sql = `
         SELECT p.intidprestamo, p.vchticket, p.intmatricula_usuario, p.intmatricula_empleado,
                p.fecha_prestamo, p.fecha_devolucion, p.booldevuelto, p.intidejemplar,
@@ -218,66 +206,60 @@ function buscarPorTicket(ticket, callback) {
         LEFT JOIN tbllibros l ON ej.vchfolio = l.vchfolio
         WHERE p.vchticket = ?
     `;
-    conexion.query(sql, [ticket], callback);
+    const [resultados] = await conexion.query(sql, [ticket]);
+    return resultados;
 }
+
 // Registrar devolución (con transacción)
-function registrarDevolucion(datos, callback) {
+async function registrarDevolucion(datos) {
     const { intidprestamo, intidejemplar, intmatricula_empleado, vchentrega, fechareal_devolucion, vchsancion, flmontosancion, boolsancion } = datos;
 
-    conexion.getConnection((err, conn) => {
-        if (err) return callback(err, null);
-        conn.beginTransaction(error => {
-            if (error) {
-                conn.release();
-                return callback(error, null);
-            }
-            conn.query("SELECT booldevuelto FROM tblprestamos WHERE intidprestamo = ?", [intidprestamo], (errorV, resV) => {
-                if (errorV || resV.length === 0) {
-                    return conn.rollback(() => { conn.release(); callback(null, { ok: false, mensaje: 'Préstamo no encontrado' }); });
-                }
-                if (resV[0].booldevuelto == 1) {
-                    return conn.rollback(() => { conn.release(); callback(null, { ok: false, mensaje: 'Este préstamo ya fue devuelto' }); });
-                }
+    const conn = await conexion.getConnection();
 
-                // Obtener ID estado entrega
-                conn.query("SELECT intidestrega FROM tblestadoentrega WHERE vchestadoentrega = ?", [vchentrega], (errorE, resE) => {
-                    let intidestrega = (resE && resE.length > 0) ? resE[0].intidestrega :
-                        (vchentrega === 'Bueno' ? 1 : vchentrega === 'Regular' ? 2 : 3);
+    try {
+        await conn.beginTransaction();
 
-                    const montoSancion = flmontosancion ? parseFloat(flmontosancion) : 0;
-                    const sancionCumplida = boolsancion ? 1 : 0;
+        // Verificar estado del préstamo
+        const [resV] = await conn.query("SELECT booldevuelto FROM tblprestamos WHERE intidprestamo = ?", [intidprestamo]);
+        if (resV.length === 0) {
+            await conn.rollback();
+            return { ok: false, mensaje: 'Préstamo no encontrado' };
+        }
+        if (resV[0].booldevuelto == 1) {
+            await conn.rollback();
+            return { ok: false, mensaje: 'Este préstamo ya fue devuelto' };
+        }
 
-                    // Insertar devolución
-                    const sqlDev = `INSERT INTO tbldevolucion (intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion, flmontosancion, boolsancion, intidestrega) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        // Obtener ID estado entrega
+        const [resE] = await conn.query("SELECT intidestrega FROM tblestadoentrega WHERE vchestadoentrega = ?", [vchentrega]);
+        let intidestrega = (resE && resE.length > 0) ? resE[0].intidestrega : 
+                           (vchentrega === 'Bueno' ? 1 : vchentrega === 'Regular' ? 2 : 3);
 
-                    conn.query(sqlDev, [intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion || null, montoSancion, sancionCumplida, intidestrega], (errorD, resD) => {
-                        if (errorD) return conn.rollback(() => { conn.release(); callback(errorD, null); });
+        const montoSancion = flmontosancion ? parseFloat(flmontosancion) : 0;
+        const sancionCumplida = boolsancion ? 1 : 0;
 
-                        // Marcar préstamo como devuelto
-                        conn.query("UPDATE tblprestamos SET booldevuelto = 1 WHERE intidprestamo = ?", [intidprestamo], (errorUP) => {
-                            if (errorUP) return conn.rollback(() => { conn.release(); callback(errorUP, null); });
+        // Insertar devolución
+        const sqlDev = `INSERT INTO tbldevolucion (intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion, flmontosancion, boolsancion, intidestrega) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+        const [resD] = await conn.query(sqlDev, [intidprestamo, fechareal_devolucion, intmatricula_empleado, vchsancion || null, montoSancion, sancionCumplida, intidestrega]);
 
-                            // Liberar ejemplar
-                            conn.query("UPDATE tblejemplares SET booldisponible = 1 WHERE intidejemplar = ?", [intidejemplar], (errorUE) => {
-                                if (errorUE) return conn.rollback(() => { conn.release(); callback(errorUE, null); });
+        // Marcar préstamo como devuelto
+        await conn.query("UPDATE tblprestamos SET booldevuelto = 1 WHERE intidprestamo = ?", [intidprestamo]);
 
-                                // Finalizar transacción
-                                conn.commit(errorC => {
-                                    if (errorC) return conn.rollback(() => { conn.release(); callback(errorC, null); });
+        // Liberar ejemplar
+        await conn.query("UPDATE tblejemplares SET booldisponible = 1 WHERE intidejemplar = ?", [intidejemplar]);
 
-                                    conn.release(); // Éxito: liberar la conexión al pool
-                                    callback(null, { ok: true, iddevolucion: resD.insertId, montoSancion });
-                                });
-                            });
-                        });
-                    });
-                });
-            });
-        });
-    });
+        await conn.commit();
+        return { ok: true, iddevolucion: resD.insertId, montoSancion };
+
+    } catch (error) {
+        await conn.rollback();
+        throw error;
+    } finally {
+        conn.release();
+    }
 }
 
-module.exports = {
+export {
     obtenerPrestamos,
     buscarEjemplares,
     buscarUsuarioConPrestamos,

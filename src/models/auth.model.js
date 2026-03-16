@@ -1,8 +1,9 @@
-const conexion = require('../config/db');
-const bcrypt = require('bcryptjs');
+import conexion from '../config/db.js'; 
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto'; 
 
-// Buscar usuario en las 3 tablas por matrícula
-function buscarUsuarioPorMatricula(matricula, callback) {
+//Buscar usuario en las 3 tablas por matrícula
+async function buscarUsuarioPorMatricula(matricula) {
     const sql = `
         SELECT intmatricula, vchnombre, vchapaterno, vchamaterno,
                vchcorreo, vchpassword, intidrol, 'Usuario' as tipo_tabla
@@ -16,74 +17,79 @@ function buscarUsuarioPorMatricula(matricula, callback) {
                vchcorreo, vchpassword, intidrol, 'Empleado' as tipo_tabla
         FROM tblempleados WHERE intmatricula = ?
     `;
-    conexion.query(sql, [matricula, matricula, matricula], callback);
+    const [rows] = await conexion.query(sql, [matricula, matricula, matricula]);
+    return rows;
 }
 
-// Obtener nombre del rol por ID
-function obtenerRolPorId(idRol, callback) {
+//Obtener nombre del rol por ID
+async function obtenerRolPorId(idRol) {
     const sql = "SELECT vchrol FROM tblroles WHERE intidrol = ?";
-    conexion.query(sql, [idRol], callback);
+    const [rows] = await conexion.query(sql, [idRol]);
+    return rows;
 }
 
-// Verificar contraseña — soporta bcrypt y MD5 legacy
+//Verificar contraseña — soporta bcrypt y MD5 legacy
 async function verificarPassword(passwordIngresado, passwordGuardado) {
     // Intentar bcrypt primero
     const esBcrypt = passwordGuardado.startsWith('$2');
     if (esBcrypt) {
         return await bcrypt.compare(passwordIngresado, passwordGuardado);
     }
-    // Fallback MD5 para cuentas antiguas)
-    const crypto = require('crypto');
+    //Fallback MD5 para cuentas antiguas
     const md5 = crypto.createHash('md5').update(passwordIngresado).digest('hex');
     return md5 === passwordGuardado;
 }
 
-// Hashear contraseña con bcrypt
+//Hashear contraseña con bcrypt
 async function hashearPassword(password) {
     return await bcrypt.hash(password, 10);
 }
 
 // Obtener todos los usuarios
-function obtenerUsuarios(callback) {
+async function obtenerUsuarios() {
     const sql = `
         SELECT intmatricula, vchnombre, vchapaterno, vchamaterno,
                vchcorreo, vchtelefono, vchcalle, vchcolonia, intidrol,
                'Usuario' as tipo_usuario, 'tblusuarios' as tabla_origen
         FROM tblusuarios ORDER BY vchnombre ASC
     `;
-    conexion.query(sql, callback);
+    const [rows] = await conexion.query(sql);
+    return rows;
 }
 
-// Obtener todos los administradores
-function obtenerAdministradores(callback) {
+//Obtener todos los administradores
+async function obtenerAdministradores() {
     const sql = `
         SELECT intmatricula, vchnombre, vchapaterno, vchamaterno,
                vchcorreo, vchtelefono, vchcalle, vchcolonia, intidrol,
                'Administrador' as tipo_usuario, 'tbladministrador' as tabla_origen
         FROM tbladministrador ORDER BY vchnombre ASC
     `;
-    conexion.query(sql, callback);
+    const [rows] = await conexion.query(sql);
+    return rows;
 }
 
-// Obtener todos los empleados
-function obtenerEmpleados(callback) {
+//Obtener todos los empleados
+async function obtenerEmpleados() {
     const sql = `
         SELECT intmatricula, vchnombre, vchapaterno, vchamaterno,
                vchcorreo, vchtelefono, vchcalle, vchcolonia, intidrol,
                'Empleado' as tipo_usuario, 'tblempleados' as tabla_origen
         FROM tblempleados ORDER BY vchnombre ASC
     `;
-    conexion.query(sql, callback);
+    const [rows] = await conexion.query(sql);
+    return rows;
 }
 
-// Eliminar usuario de una tabla
-function eliminarUsuario(tabla, matricula, callback) {
+//Eliminar usuario de una tabla
+async function eliminarUsuario(tabla, matricula) {
     const sql = `DELETE FROM ${tabla} WHERE intmatricula = ?`;
-    conexion.query(sql, [matricula], callback);
+    const [resultado] = await conexion.query(sql, [matricula]);
+    return resultado;
 }
 
-// Obtener perfil de usuario por matrícula y tabla
-function obtenerPerfil(tabla, matricula, callback) {
+//Obtener perfil de usuario por matrícula y tabla
+async function obtenerPerfil(tabla, matricula) {
     const sql = `
         SELECT u.intmatricula, u.vchnombre, u.vchapaterno, u.vchamaterno,
                u.vchtelefono, u.vchcorreo, u.vchcalle, u.vchcolonia, r.vchrol
@@ -91,11 +97,12 @@ function obtenerPerfil(tabla, matricula, callback) {
         JOIN tblroles r ON u.intidrol = r.intidrol
         WHERE u.intmatricula = ?
     `;
-    conexion.query(sql, [matricula], callback);
+    const [rows] = await conexion.query(sql, [matricula]);
+    return rows;
 }
 
-// Actualizar perfil de usuario
-function actualizarPerfil(tabla, campos, matricula, callback) {
+//Actualizar perfil de usuario
+async function actualizarPerfil(tabla, campos, matricula) {
     const { vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword } = campos;
 
     let sql = `
@@ -117,27 +124,30 @@ function actualizarPerfil(tabla, campos, matricula, callback) {
     sql += ' WHERE intmatricula = ?';
     params.push(matricula);
 
-    conexion.query(sql, params, callback);
+    const [resultado] = await conexion.query(sql, params);
+    return resultado;
 }
 
-// Obtener un usuario específico por matrícula y tabla
-function obtenerUsuarioPorMatricula(tabla, matricula, callback) {
+//Obtener un usuario específico por matrícula y tabla
+async function obtenerUsuarioPorMatricula(tabla, matricula) {
     const sql = `
         SELECT intmatricula, vchnombre, vchapaterno, vchamaterno,
                vchtelefono, vchcorreo, vchcalle, vchcolonia, intidrol
         FROM ${tabla} WHERE intmatricula = ?
     `;
-    conexion.query(sql, [matricula], callback);
+    const [rows] = await conexion.query(sql, [matricula]);
+    return rows;
 }
 
-// Obtener todos los roles
-function obtenerRoles(callback) {
+//Obtener todos los roles
+async function obtenerRoles() {
     const sql = "SELECT intidrol, vchrol FROM tblroles ORDER BY intidrol ASC";
-    conexion.query(sql, callback);
+    const [rows] = await conexion.query(sql);
+    return rows;
 }
 
-// Actualizar usuario por admin (cambia tabla, rol, datos y opcionalmente contraseña)
-async function actualizarUsuario(datos, callback) {
+//Actualizar usuario por admin
+async function actualizarUsuario(datos) {
     const {
         matricula_original, tabla, intmatricula, intidrol,
         vchnombre, vchapaterno, vchamaterno, vchtelefono,
@@ -166,22 +176,29 @@ async function actualizarUsuario(datos, callback) {
     sql += ' WHERE intmatricula = ?';
     params.push(matricula_original);
 
-    conexion.query(sql, params, callback);
+    const [resultado] = await conexion.query(sql, params);
+    return resultado;
 }
 
-
-// En obtenerUltimaMatricula y registrarUsuario, cambia pool por conexion:
-function obtenerUltimaMatricula(tabla, callback) {
-    conexion.query(`SELECT MAX(intmatricula) as ultima FROM ${tabla}`, callback);
+//Obtener la última matrícula generada
+async function obtenerUltimaMatricula(tabla) {
+    const sql = `SELECT MAX(intmatricula) as ultima FROM ${tabla}`;
+    const [rows] = await conexion.query(sql);
+    return rows;
 }
 
-function registrarUsuario(tabla, datos, callback) {
+//Registrar nuevo usuario
+async function registrarUsuario(tabla, datos) {
     const { matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol } = datos;
     const sql = `INSERT INTO ${tabla} (intmatricula, vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    conexion.query(sql, [matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono || null, vchcorreo, vchcalle || null, vchcolonia || null, vchpassword, intidrol], callback);
+    const params = [matricula, vchnombre, vchapaterno, vchamaterno, vchtelefono || null, vchcorreo, vchcalle || null, vchcolonia || null, vchpassword, intidrol];
+    
+    const [resultado] = await conexion.query(sql, params);
+    return resultado;
 }
 
-module.exports = {
+//Exportación estilo ES Modules
+export {
     buscarUsuarioPorMatricula, obtenerRolPorId, verificarPassword, hashearPassword,
     obtenerUsuarios, obtenerAdministradores, obtenerEmpleados,
     eliminarUsuario, obtenerPerfil, actualizarPerfil,

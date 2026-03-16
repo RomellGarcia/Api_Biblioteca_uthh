@@ -1,5 +1,5 @@
-const { generarToken } = require('../config/jwt');
-const {
+import { generarToken } from '../config/jwt.js';
+import {
     buscarUsuarioPorMatricula,
     obtenerRolPorId,
     verificarPassword,
@@ -15,172 +15,199 @@ const {
     actualizarUsuario,
     obtenerUltimaMatricula,
     registrarUsuario        
-} = require('../models/auth.model');
+} from '../models/auth.model.js';
 
 // POST /api/auth/login
 async function login(req, res) {
-    const { matricula, password, recordar } = req.body;
+    try {
+        const { matricula, password } = req.body;
 
-    if (!matricula || !password) {
-        return res.status(400).json({ success: false, message: 'Matrícula y contraseña son requeridos' });
-    }
+        if (!matricula || !password) {
+            return res.status(400).json({ success: false, message: 'Matrícula y contraseña son requeridos' });
+        }
 
-    const matriculaNum = parseInt(matricula);
-    if (isNaN(matriculaNum) || matriculaNum <= 0) {
-        return res.status(400).json({ success: false, message: 'Matrícula inválida' });
-    }
-
-    buscarUsuarioPorMatricula(matriculaNum, async (error, resultados) => {
-        if (error) return res.status(500).json({ success: false, message: 'Error de base de datos' });
-        if (resultados.length === 0) return res.status(404).json({ success: false, message: 'Perfil no encontrado' });
+        const matriculaNum = parseInt(matricula);
+        if (isNaN(matriculaNum) || matriculaNum <= 0) {
+            return res.status(400).json({ success: false, message: 'Matrícula inválida' });
+        }
+        const resultados = await buscarUsuarioPorMatricula(matriculaNum);
+        
+        if (resultados.length === 0) {
+            return res.status(404).json({ success: false, message: 'Perfil no encontrado' });
+        }
 
         const usuario = resultados[0];
 
         const passwordValido = await verificarPassword(password, usuario.vchpassword);
-        if (!passwordValido) return res.status(401).json({ success: false, message: 'Contraseña incorrecta' });
+        if (!passwordValido) {
+            return res.status(401).json({ success: false, message: 'Contraseña incorrecta' });
+        }
 
-        obtenerRolPorId(usuario.intidrol, (errorRol, resultadosRol) => {
-            if (errorRol) return res.status(500).json({ success: false, message: 'Error al obtener rol' });
+        const resultadosRol = await obtenerRolPorId(usuario.intidrol);
+        const nombreRol = resultadosRol.length > 0 ? resultadosRol[0].vchrol.trim() : 'Sin Rol';
+        
+        const apellidos = `${usuario.vchapaterno || ''} ${usuario.vchamaterno || ''}`.trim();
+        const nombreCompleto = `${usuario.vchnombre} ${apellidos}`.trim();
 
-            const nombreRol = resultadosRol.length > 0 ? resultadosRol[0].vchrol.trim() : 'Sin Rol';
-            const apellidos = `${usuario.vchapaterno || ''} ${usuario.vchamaterno || ''}`.trim();
-            const nombreCompleto = `${usuario.vchnombre} ${apellidos}`.trim();
+        const datosUsuario = {
+            id: usuario.intmatricula,
+            matricula: usuario.intmatricula,
+            nombre: usuario.vchnombre,
+            apellidos,
+            nombre_completo: nombreCompleto,
+            correo: usuario.vchcorreo,
+            idrol: usuario.intidrol,
+            rol: nombreRol,
+            tipo_tabla: usuario.tipo_tabla
+        };
 
-            const datosUsuario = {
-                id: usuario.intmatricula,
-                matricula: usuario.intmatricula,
-                nombre: usuario.vchnombre,
-                apellidos,
-                nombre_completo: nombreCompleto,
-                correo: usuario.vchcorreo,
-                idrol: usuario.intidrol,
-                rol: nombreRol,
-                tipo_tabla: usuario.tipo_tabla
-            };
+        const token = generarToken(datosUsuario);
 
-            const token = generarToken(datosUsuario);
+        const redirectPorRol = {
+            1: '/HTML/gestion_prestamos.html',
+            2: '/HTML/gestion_prestamos.html',
+            3: '/HTML/index.html'              
+        };
 
-            const redirectPorRol = {
-                1: '/HTML/gestion_prestamos.html', // Administrador
-                2: '/HTML/gestion_prestamos.html', // Empleado
-                3: '/HTML/index.html'              // Usuario
-            };
-
-            res.json({
-                success: true,
-                message: 'Inicio de sesión exitoso',
-                token,
-                usuario: datosUsuario,
-                redirect: redirectPorRol[usuario.intidrol] || '/HTML/index.html'
-            });
+        res.json({
+            success: true,
+            message: 'Inicio de sesión exitoso',
+            token,
+            usuario: datosUsuario,
+            redirect: redirectPorRol[usuario.intidrol] || '/HTML/index.html'
         });
-    });
+
+    } catch (error) {
+        console.error('Error en login:', error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor' });
+    }
 }
 
-// GET /api/auth/verificar
+// GET /api/auth/verificar (Refactorizado para JWT)
 function verificar(req, res) {
-    if (!req.session || !req.session.logueado || !req.session.usuario) {
+    if (!req.usuario) {
         return res.json({ success: false, logged_in: false });
     }
-    res.json({ success: true, logged_in: true, usuario: req.session.usuario });
+    res.json({ success: true, logged_in: true, usuario: req.usuario });
 }
 
 // GET /api/auth/usuarios
-function getUsuarios(req, res) {
-    obtenerUsuarios((error, resultados) => {
-        if (error) return res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+async function getUsuarios(req, res) {
+    try {
+        const resultados = await obtenerUsuarios();
         res.json({ success: true, data: resultados });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener usuarios' });
+    }
 }
 
 // GET /api/auth/administradores
-function getAdministradores(req, res) {
-    obtenerAdministradores((error, resultados) => {
-        if (error) return res.status(500).json({ success: false, error: 'Error al obtener administradores' });
+async function getAdministradores(req, res) {
+    try {
+        const resultados = await obtenerAdministradores();
         res.json({ success: true, data: resultados });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener administradores' });
+    }
 }
 
 // GET /api/auth/empleados
-function getEmpleados(req, res) {
-    obtenerEmpleados((error, resultados) => {
-        if (error) return res.status(500).json({ success: false, error: 'Error al obtener empleados' });
+async function getEmpleados(req, res) {
+    try {
+        const resultados = await obtenerEmpleados();
         res.json({ success: true, data: resultados });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener empleados' });
+    }
 }
 
 // GET /api/auth/usuarios/todos
-function getTodosLosUsuarios(req, res) {
-    obtenerUsuarios((err1, usuarios) => {
-        obtenerAdministradores((err2, admins) => {
-            obtenerEmpleados((err3, empleados) => {
-                // AGREGAMOS ESTO: obtener todos los roles
-                obtenerRoles((err4, roles) => {
-                    if (err1 || err2 || err3 || err4) {
-                        return res.status(500).json({ success: false, error: 'Error al obtener datos' });
-                    }
-                    const todos = [...(usuarios || []), ...(admins || []), ...(empleados || [])];
-                    // Enviamos usuarios y roles
-                    res.json({ success: true, data: todos, roles: roles || [] });
-                });
-            });
-        });
-    });
-}
-// DELETE /api/auth/usuarios/:matricula
-function deleteUsuario(req, res) {
-    const { matricula } = req.params;
-    const { tabla } = req.query;
+async function getTodosLosUsuarios(req, res) {
+    try {
+        const [usuarios, admins, empleados, roles] = await Promise.all([
+            obtenerUsuarios(),
+            obtenerAdministradores(),
+            obtenerEmpleados(),
+            obtenerRoles()
+        ]);
 
-    if (!tabla || !['tblusuarios', 'tbladministrador', 'tblempleados'].includes(tabla)) {
-        return res.status(400).json({ success: false, error: 'Tabla no válida' });
+        const todos = [...(usuarios || []), ...(admins || []), ...(empleados || [])];
+        res.json({ success: true, data: todos, roles: roles || [] });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener datos' });
     }
-
-    eliminarUsuario(tabla, matricula, (error, resultado) => {
-        if (error) return res.status(500).json({ success: false, error: 'Error al eliminar usuario' });
-        if (resultado.affectedRows === 0) return res.json({ success: false, error: 'Usuario no encontrado' });
-        res.json({ success: true, message: 'Usuario eliminado correctamente' });
-    });
 }
+
+// DELETE /api/auth/usuarios/:matricula
+async function deleteUsuario(req, res) {
+    try {
+        const { matricula } = req.params;
+        const { tabla } = req.query;
+
+        if (!tabla || !['tblusuarios', 'tbladministrador', 'tblempleados'].includes(tabla)) {
+            return res.status(400).json({ success: false, error: 'Tabla no válida' });
+        }
+
+        const resultado = await eliminarUsuario(tabla, matricula);
+        
+        if (resultado.affectedRows === 0) {
+            return res.json({ success: false, error: 'Usuario no encontrado' });
+        }
+        res.json({ success: true, message: 'Usuario eliminado correctamente' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al eliminar usuario' });
+    }
+}
+
 // GET /api/auth/perfil
-function getPerfil(req, res) {
-    const { matricula, idrol } = req.usuario;  // ← req.usuario
-    const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
-    const tabla = tablasPorRol[parseInt(idrol)];
+async function getPerfil(req, res) {
+    try {
+        const { matricula, idrol } = req.usuario;
+        const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
+        const tabla = tablasPorRol[parseInt(idrol)];
 
-    if (!tabla) return res.status(400).json({ success: false, error: 'Rol no válido' });
+        if (!tabla) return res.status(400).json({ success: false, error: 'Rol no válido' });
 
-    obtenerPerfil(tabla, matricula, (error, resultados) => {
-        if (error) return res.status(500).json({ success: false, error: 'Error al obtener perfil' });
-        if (resultados.length === 0) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        const resultados = await obtenerPerfil(tabla, matricula);
+        
+        if (resultados.length === 0) {
+            return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        }
         res.json({ success: true, usuario: resultados[0] });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener perfil' });
+    }
 }
 
 // PUT /api/auth/perfil
 async function putPerfil(req, res) {
-    const { matricula, idrol } = req.usuario;  // ← req.usuario
-    const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
-    const tabla = tablasPorRol[parseInt(idrol)];
+    try {
+        const { matricula, idrol } = req.usuario;
+        const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
+        const tabla = tablasPorRol[parseInt(idrol)];
 
-    if (!tabla) return res.status(400).json({ success: false, mensaje: 'Rol no válido' });
+        if (!tabla) return res.status(400).json({ success: false, mensaje: 'Rol no válido' });
 
-    const { vchnombre, vchcorreo, vchpassword } = req.body;
-    if (!vchnombre || !vchcorreo) {
-        return res.status(400).json({ success: false, mensaje: 'Nombre y correo son requeridos' });
-    }
+        const { vchnombre, vchcorreo, vchpassword } = req.body;
+        if (!vchnombre || !vchcorreo) {
+            return res.status(400).json({ success: false, mensaje: 'Nombre y correo son requeridos' });
+        }
 
-    const campos = { ...req.body };
+        const campos = { ...req.body };
 
-    if (vchpassword && vchpassword.trim() !== '') {
-        campos.vchpassword = await hashearPassword(vchpassword);
-    }
+        if (vchpassword && vchpassword.trim() !== '') {
+            campos.vchpassword = await hashearPassword(vchpassword);
+        }
 
-    actualizarPerfil(tabla, campos, matricula, (error, resultado) => {
-        if (error) return res.status(500).json({ success: false, mensaje: 'Error al actualizar perfil' });
-        if (resultado.affectedRows === 0) return res.json({ success: false, mensaje: 'No se pudo actualizar el perfil' });
+        const resultado = await actualizarPerfil(tabla, campos, matricula);
+        
+        if (resultado.affectedRows === 0) {
+            return res.json({ success: false, mensaje: 'No se pudo actualizar el perfil' });
+        }
         res.json({ success: true, mensaje: 'Perfil actualizado correctamente' });
-    });
+    } catch (error) {
+        res.status(500).json({ success: false, mensaje: 'Error al actualizar perfil' });
+    }
 }
 
 // POST /api/auth/logout
@@ -188,46 +215,54 @@ function logout(req, res) {
     res.json({ success: true, message: 'Sesión cerrada correctamente', redirect: '/HTML/iniciar_sesion.html' });
 }
 
-// GET /api/auth/usuarios/:matricula — obtener un usuario específico
-function getUsuarioPorMatricula(req, res) {
-    const { matricula } = req.params;
-    const { tabla } = req.query;
-    const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
-
-    if (!tabla || !tablasPermitidas.includes(tabla)) {
-        return res.status(400).json({ success: false, error: 'Tabla no válida' });
-    }
-
-    obtenerUsuarioPorMatricula(tabla, matricula, (error, resultados) => {
-        if (error) return res.status(500).json({ success: false, error: 'Error al obtener usuario' });
-        if (resultados.length === 0) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-        res.json({ success: true, data: resultados[0] });
-    });
-}
-
-// GET /api/auth/roles — obtener todos los roles
-function getRoles(req, res) {
-    obtenerRoles((error, resultados) => {
-        if (error) return res.status(500).json({ success: false, error: 'Error al obtener roles' });
-        res.json({ success: true, data: resultados });
-    });
-}
-
-// POST /api/auth/usuarios/actualizar — actualizar usuario por admin
-async function postActualizarUsuario(req, res) {
-    const { tabla } = req.body;
-    const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
-
-    if (!tabla || !tablasPermitidas.includes(tabla)) {
-        return res.status(400).json({ success: false, error: 'Tabla no válida' });
-    }
-
+// GET /api/auth/usuarios/:matricula
+async function getUsuarioPorMatricula(req, res) {
     try {
-        actualizarUsuario(req.body, (error, resultado) => {
-            if (error) return res.status(500).json({ success: false, error: 'Error al actualizar usuario' });
-            if (resultado.affectedRows === 0) return res.json({ success: false, error: 'Usuario no encontrado' });
-            res.json({ success: true, message: 'Usuario actualizado correctamente' });
-        });
+        const { matricula } = req.params;
+        const { tabla } = req.query;
+        const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
+
+        if (!tabla || !tablasPermitidas.includes(tabla)) {
+            return res.status(400).json({ success: false, error: 'Tabla no válida' });
+        }
+
+        const resultados = await obtenerUsuarioPorMatricula(tabla, matricula);
+        
+        if (resultados.length === 0) {
+            return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        }
+        res.json({ success: true, data: resultados[0] });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener usuario' });
+    }
+}
+
+// GET /api/auth/roles
+async function getRoles(req, res) {
+    try {
+        const resultados = await obtenerRoles();
+        res.json({ success: true, data: resultados });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Error al obtener roles' });
+    }
+}
+
+// POST /api/auth/usuarios/actualizar
+async function postActualizarUsuario(req, res) {
+    try {
+        const { tabla } = req.body;
+        const tablasPermitidas = ['tblusuarios', 'tbladministrador', 'tblempleados'];
+
+        if (!tabla || !tablasPermitidas.includes(tabla)) {
+            return res.status(400).json({ success: false, error: 'Tabla no válida' });
+        }
+
+        const resultado = await actualizarUsuario(req.body);
+        
+        if (resultado.affectedRows === 0) {
+            return res.json({ success: false, error: 'Usuario no encontrado' });
+        }
+        res.json({ success: true, message: 'Usuario actualizado correctamente' });
     } catch (error) {
         res.status(500).json({ success: false, error: 'Error al procesar la solicitud' });
     }
@@ -235,63 +270,56 @@ async function postActualizarUsuario(req, res) {
 
 // POST /api/auth/registro
 async function registro(req, res) {
-    const { vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol } = req.body;
-
-    if (!vchnombre || !vchapaterno || !vchcorreo || !vchpassword || !intidrol) {
-        return res.status(400).json({ success: false, message: 'Faltan campos requeridos' });
-    }
-
-    const rol = parseInt(intidrol);
-    const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
-    const tabla = tablasPorRol[rol];
-
-    if (!tabla) {
-        return res.status(400).json({ success: false, message: 'Rol no válido' });
-    }
-
     try {
+        const { vchnombre, vchapaterno, vchamaterno, vchtelefono, vchcorreo, vchcalle, vchcolonia, vchpassword, intidrol } = req.body;
+
+        if (!vchnombre || !vchapaterno || !vchcorreo || !vchpassword || !intidrol) {
+            return res.status(400).json({ success: false, message: 'Faltan campos requeridos' });
+        }
+
+        const rol = parseInt(intidrol);
+        const tablasPorRol = { 1: 'tbladministrador', 2: 'tblempleados', 3: 'tblusuarios' };
+        const tabla = tablasPorRol[rol];
+
+        if (!tabla) return res.status(400).json({ success: false, message: 'Rol no válido' });
+
         const passwordHash = await hashearPassword(vchpassword);
 
-        obtenerUltimaMatricula(tabla, (error, resultados) => {
-            if (error) return res.status(500).json({ success: false, message: 'Error al generar matrícula' });
+        const resultadosUltima = await obtenerUltimaMatricula(tabla);
+        const ultimaMatricula = resultadosUltima[0]?.ultima || 10100000;
+        const nuevaMatricula = ultimaMatricula + 1;
 
-            const ultimaMatricula = resultados[0].ultima || 10100000;
-            const nuevaMatricula = ultimaMatricula + 1;
+        const datos = {
+            matricula: nuevaMatricula,
+            vchnombre,
+            vchapaterno,
+            vchamaterno: vchamaterno || null,
+            vchtelefono: vchtelefono || null,
+            vchcorreo,
+            vchcalle: vchcalle || null,
+            vchcolonia: vchcolonia || null,
+            vchpassword: passwordHash,
+            intidrol: rol
+        };
 
-            const datos = {
-                matricula: nuevaMatricula,
-                vchnombre,
-                vchapaterno,
-                vchamaterno: vchamaterno || null,
-                vchtelefono: vchtelefono || null,
-                vchcorreo,
-                vchcalle: vchcalle || null,
-                vchcolonia: vchcolonia || null,
-                vchpassword: passwordHash,
-                intidrol: rol
-            };
+        await registrarUsuario(tabla, datos);
 
-            registrarUsuario(tabla, datos, (errorReg, resultado) => {
-                if (errorReg) {
-                    if (errorReg.code === 'ER_DUP_ENTRY') {
-                        return res.status(409).json({ success: false, message: 'El correo ya está registrado' });
-                    }
-                    return res.status(500).json({ success: false, message: 'Error al registrar usuario' });
-                }
-
-                res.json({
-                    success: true,
-                    message: 'Usuario registrado correctamente',
-                    matricula: nuevaMatricula
-                });
-            });
+        res.json({
+            success: true,
+            message: 'Usuario registrado correctamente',
+            matricula: nuevaMatricula
         });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Error al procesar registro' });
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ success: false, message: 'El correo ya está registrado' });
+        }
+        console.error('Error en registro:', error);
+        res.status(500).json({ success: false, message: 'Error al registrar usuario' });
     }
 }
 
-module.exports = {
+export {
     login, verificar, logout,
     getUsuarios, getAdministradores, getEmpleados,
     deleteUsuario, getPerfil, putPerfil,

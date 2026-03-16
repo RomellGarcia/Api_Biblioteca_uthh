@@ -1,4 +1,4 @@
-const conexion = require('../config/db');
+import conexion from '../config/db.js';
 
 // Helper para convertir imagen BLOB a base64
 function procesarImagen(imagenBlob) {
@@ -47,7 +47,7 @@ function obtenerIconoCategoria(nombreCategoria) {
 }
 
 // Obtener libros recomendados aleatorios
-function obtenerLibrosRecomendados(callback) {
+async function obtenerLibrosRecomendados() {
     const sql = `
         SELECT l.vchfolio, l.vchtitulo, l.vchautor, l.vcheditorial,
                l.intanio, l.imagen, c.vchcategoria
@@ -55,19 +55,17 @@ function obtenerLibrosRecomendados(callback) {
         LEFT JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
         ORDER BY RAND() LIMIT 8
     `;
-    conexion.query(sql, (error, resultados) => {
-        if (error) return callback(error, null);
-        const libros = resultados.map(libro => ({
-            ...libro,
-            imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
-            color_fondo: !libro.imagen ? colorAleatorio() : undefined
-        }));
-        callback(null, libros);
-    });
+    const [resultados] = await conexion.query(sql);
+    
+    return resultados.map(libro => ({
+        ...libro,
+        imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
+        color_fondo: !libro.imagen ? colorAleatorio() : undefined
+    }));
 }
 
 // Obtener categorías con libros
-function obtenerCategorias(callback) {
+async function obtenerCategorias() {
     const sql = `
         SELECT DISTINCT c.intidcategoria, c.vchcategoria, c.vchdescripcion
         FROM tblcategoria c
@@ -76,19 +74,17 @@ function obtenerCategorias(callback) {
         GROUP BY c.intidcategoria, c.vchcategoria, c.vchdescripcion
         ORDER BY c.vchcategoria ASC
     `;
-    conexion.query(sql, (error, resultados) => {
-        if (error) return callback(error, null);
-        const categorias = resultados.map(categoria => ({
-            intidcategoria: categoria.intidcategoria,
-            vchcategoria: categoria.vchcategoria,
-            icono: obtenerIconoCategoria(categoria.vchcategoria)
-        }));
-        callback(null, categorias);
-    });
+    const [resultados] = await conexion.query(sql);
+    
+    return resultados.map(categoria => ({
+        intidcategoria: categoria.intidcategoria,
+        vchcategoria: categoria.vchcategoria,
+        icono: obtenerIconoCategoria(categoria.vchcategoria)
+    }));
 }
 
 // Obtener libros más pedidos
-function obtenerLibrosMasPedidos(callback) {
+async function obtenerLibrosMasPedidos() {
     const sql = `
         SELECT l.vchfolio, l.vchtitulo, l.vchautor, l.vcheditorial, l.imagen,
                c.vchcategoria, COUNT(p.intidprestamo) as total_prestamos
@@ -99,19 +95,17 @@ function obtenerLibrosMasPedidos(callback) {
         GROUP BY l.vchfolio, l.vchtitulo, l.vchautor, l.vcheditorial, l.imagen, c.vchcategoria
         ORDER BY total_prestamos DESC, RAND() LIMIT 6
     `;
-    conexion.query(sql, (error, resultados) => {
-        if (error) return callback(error, null);
-        const libros = resultados.map(libro => ({
-            ...libro,
-            imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
-            color_fondo: !libro.imagen ? colorAleatorio() : undefined
-        }));
-        callback(null, libros);
-    });
+    const [resultados] = await conexion.query(sql);
+    
+    return resultados.map(libro => ({
+        ...libro,
+        imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
+        color_fondo: !libro.imagen ? colorAleatorio() : undefined
+    }));
 }
 
 // Obtener catálogo completo
-function obtenerCatalogo(callback) {
+async function obtenerCatalogo() {
     const sql = `
         SELECT l.vchfolio, l.vchtitulo, l.vchautor, l.vcheditorial, l.intanio,
                l.vchsinopsis, l.intidcategoria, l.boolactivo, l.imagen,
@@ -121,18 +115,16 @@ function obtenerCatalogo(callback) {
                 WHERE e.vchfolio = l.vchfolio) as total_ejemplares
         FROM tbllibros l ORDER BY l.vchfolio DESC
     `;
-    conexion.query(sql, (error, resultados) => {
-        if (error) return callback(error, null);
-        const libros = resultados.map(libro => ({
-            ...libro,
-            imagen: libro.imagen ? procesarImagen(libro.imagen) : null
-        }));
-        callback(null, libros);
-    });
+    const [resultados] = await conexion.query(sql);
+    
+    return resultados.map(libro => ({
+        ...libro,
+        imagen: libro.imagen ? procesarImagen(libro.imagen) : null
+    }));
 }
 
 // Buscar libros por título o autor
-function buscarLibros(q, callback) {
+async function buscarLibros(q) {
     const sql = `
         SELECT l.*, c.vchcategoria,
                (SELECT COUNT(*) FROM tblejemplares e 
@@ -141,19 +133,17 @@ function buscarLibros(q, callback) {
         LEFT JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
         WHERE l.vchtitulo LIKE ? OR l.vchautor LIKE ?
     `;
-    conexion.query(sql, [`%${q}%`, `%${q}%`], (error, resultados) => {
-        if (error) return callback(error, null);
-        const libros = resultados.map(libro => ({
-            ...libro,
-            imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
-            color_fondo: !libro.imagen ? colorAleatorio() : undefined
-        }));
-        callback(null, libros);
-    });
+    const [resultados] = await conexion.query(sql, [`%${q}%`, `%${q}%`]);
+    
+    return resultados.map(libro => ({
+        ...libro,
+        imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
+        color_fondo: !libro.imagen ? colorAleatorio() : undefined
+    }));
 }
 
 // Obtener detalle de un libro por folio
-function obtenerDetalle(folio, callback) {
+async function obtenerDetalle(folio) {
     const sql = `
         SELECT l.*, c.vchcategoria,
                (SELECT COUNT(*) FROM tblejemplares e 
@@ -165,78 +155,68 @@ function obtenerDetalle(folio, callback) {
         WHERE l.vchfolio = ?
     `;
     
-    conexion.query(sql, [folio], (error, resultados) => {
-        if (error) {
-            console.error("Error SQL en obtenerDetalle:", error);
-            return callback(error, null);
-        }
-        
-        if (!resultados || resultados.length === 0) {
-            return callback(null, null); // Libro no existe, devolvemos null
-        }
+    const [resultados] = await conexion.query(sql, [folio]);
+    
+    if (!resultados || resultados.length === 0) {
+        return null; // Libro no existe
+    }
 
-        const data = resultados[0];
-        
+    const data = resultados[0];
+    let imagenBase64 = null;
+    
+    // Protección contra errores en el procesamiento de imagen
+    if (data.imagen) {
         try {
-            // Protección contra errores en el procesamiento de imagen
-            let imagenBase64 = null;
-            if (data.imagen) {
-                try {
-                    imagenBase64 = procesarImagen(data.imagen);
-                } catch (imgError) {
-                    console.error("Error procesando imagen para el folio " + folio, imgError);
-                }
-            }
-
-            const libro = {
-                ...data,
-                imagen: imagenBase64
-            };
-            callback(null, libro);
-        } catch (err) {
-            console.error("Error inesperado al mapear objeto:", err);
-            callback(err, null);
+            imagenBase64 = procesarImagen(data.imagen);
+        } catch (imgError) {
+            console.error("Error procesando imagen para el folio " + folio, imgError);
         }
-    });
+    }
+
+    return {
+        ...data,
+        imagen: imagenBase64
+    };
 }
 
 // Obtener libros de una categoría específica
-function obtenerPorCategoria(categoriaId, callback) {
+async function obtenerPorCategoria(categoriaId) {
+    // Primera consulta: obtener detalles de la categoría
     const sqlCategoria = "SELECT vchcategoria, vchdescripcion FROM tblcategoria WHERE intidcategoria = ?";
-    conexion.query(sqlCategoria, [categoriaId], (errorC, resCategoria) => {
-        if (errorC) return callback(errorC, null);
-        if (resCategoria.length === 0) return callback(null, null);
+    const [resCategoria] = await conexion.query(sqlCategoria, [categoriaId]);
+    
+    if (resCategoria.length === 0) return null;
 
-        const sqlLibros = `
-            SELECT l.vchfolio, l.vchtitulo, l.vchautor, l.vcheditorial,
-                   l.intanio, l.imagen, l.vchisbn, l.boolactivo,
-                   (SELECT COUNT(*) FROM tblejemplares e 
-                    WHERE e.vchfolio = l.vchfolio AND e.booldisponible = 1) as ejemplares_disponibles,
-                   (SELECT COUNT(*) FROM tblejemplares e 
-                    WHERE e.vchfolio = l.vchfolio) as total_ejemplares
-            FROM tbllibros l
-            WHERE l.intidcategoria = ? ORDER BY l.vchtitulo ASC
-        `;
-        conexion.query(sqlLibros, [categoriaId], (errorL, resLibros) => {
-            if (errorL) return callback(errorL, null);
-            const libros = resLibros.map(libro => ({
-                ...libro,
-                imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
-                color_fondo: !libro.imagen ? colorAleatorio() : undefined
-            }));
-            callback(null, {
-                categoria: {
-                    id: categoriaId,
-                    nombre: resCategoria[0].vchcategoria,
-                    descripcion: resCategoria[0].vchdescripcion
-                },
-                libros
-            });
-        });
-    });
+    // Segunda consulta: obtener los libros de esa categoría
+    const sqlLibros = `
+        SELECT l.vchfolio, l.vchtitulo, l.vchautor, l.vcheditorial,
+               l.intanio, l.imagen, l.vchisbn, l.boolactivo,
+               (SELECT COUNT(*) FROM tblejemplares e 
+                WHERE e.vchfolio = l.vchfolio AND e.booldisponible = 1) as ejemplares_disponibles,
+               (SELECT COUNT(*) FROM tblejemplares e 
+                WHERE e.vchfolio = l.vchfolio) as total_ejemplares
+        FROM tbllibros l
+        WHERE l.intidcategoria = ? ORDER BY l.vchtitulo ASC
+    `;
+    const [resLibros] = await conexion.query(sqlLibros, [categoriaId]);
+    
+    const libros = resLibros.map(libro => ({
+        ...libro,
+        imagen: libro.imagen ? procesarImagen(libro.imagen) : null,
+        color_fondo: !libro.imagen ? colorAleatorio() : undefined
+    }));
+    
+    return {
+        categoria: {
+            id: categoriaId,
+            nombre: resCategoria[0].vchcategoria,
+            descripcion: resCategoria[0].vchdescripcion
+        },
+        libros
+    };
 }
 
-module.exports = {
+export {
     obtenerLibrosRecomendados,
     obtenerCategorias,
     obtenerLibrosMasPedidos,

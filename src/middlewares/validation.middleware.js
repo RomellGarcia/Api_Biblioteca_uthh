@@ -1,7 +1,7 @@
 /**
  * Middleware para validar que existan campos requeridos en el body
  * @param {Array} camposRequeridos 
- */
+
 const validarCamposRequeridos = (camposRequeridos) => {
     return (req, res, next) => {
         const camposFaltantes = [];
@@ -122,4 +122,4 @@ module.exports = {
     validarEmail,
     validarFecha,
     validarQueryParams
-};
+};  */
