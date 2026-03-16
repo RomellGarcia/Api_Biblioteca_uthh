@@ -8,7 +8,7 @@ import {
     postSancion, 
     getBuscarPorTicket, 
     postDevolucion 
-} from '../controllers/prestamos.controllers.js';
+} from '../controllers/prestamos.controller.js';
 import { 
     verificarAutenticacion, 
     verificarRolAdminEmpleado 
