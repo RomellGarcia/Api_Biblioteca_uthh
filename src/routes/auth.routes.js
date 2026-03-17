@@ -8,7 +8,6 @@ import {
     registro, getTodosLosUsuarios 
 } from '../controllers/auth.controller.js';
 
-//Importamos los middlewares con la extensión .js
 import { verificarAutenticacion, verificarRolAdminEmpleado } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
