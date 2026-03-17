@@ -17,9 +17,9 @@ function colorAleatorio() {
     return colores[Math.floor(Math.random() * colores.length)];
 }
 
-// Mapeo de categorías a imágenes locales
+// Mapeo de categorías a nombres de archivos
 function obtenerIconoCategoria(nombreCategoria) {
-    if (!nombreCategoria) return '/images/categorias/Ciencias.png';
+    if (!nombreCategoria) return 'Ciencias.png'; 
     const nombre = nombreCategoria.toLowerCase().trim();
     const mapa = {
         'ficción - aventura': 'Ficción_Aventura',
@@ -43,7 +43,7 @@ function obtenerIconoCategoria(nombreCategoria) {
         'idiomas y lingüística': 'Idiomas'
     };
     const archivo = mapa[nombre] || 'Ciencias';
-    return `/images/categorias/${archivo}.png`;
+    return `images/categorias/${archivo}.png`;
 }
 
 // Obtener libros recomendados aleatorios
