@@ -17,35 +17,6 @@ function colorAleatorio() {
     return colores[Math.floor(Math.random() * colores.length)];
 }
 
-// Mapeo de categorías a nombres de archivos
-function obtenerIconoCategoria(nombreCategoria) {
-    if (!nombreCategoria) return 'Ciencias.png'; 
-    const nombre = nombreCategoria.toLowerCase().trim();
-    const mapa = {
-        'ficción - aventura': 'Ficción_Aventura',
-        'historia': 'Historia',
-        'cómics': 'Comics',
-        'cocina y recetas': 'Cocina',
-        'diccionarios': 'Diccionario',
-        'literatura juvenil': 'Literatura_Juvenil',
-        'ciencias': 'Ciencias',
-        'tecnología': 'Tecnologia',
-        'salud y deporte': 'Salud',
-        'divulgativos': 'Divulgativos',
-        'administración y negocios': 'Administracion',
-        'educación y pedagogía': 'Pedagogia',
-        'ingeniería': 'Ingenieria',
-        'filosofía': 'Filosofia',
-        'programación': 'Programacion',
-        'matemáticas': 'Matematicas',
-        'novela': 'novelas',
-        'economía': 'Economia',
-        'idiomas y lingüística': 'Idiomas'
-    };
-    const archivo = mapa[nombre] || 'Ciencias';
-    return `images/categorias/${archivo}.png`;
-}
-
 // Obtener libros recomendados aleatorios
 async function obtenerLibrosRecomendados() {
     const sql = `
@@ -67,11 +38,10 @@ async function obtenerLibrosRecomendados() {
 // Obtener categorías con libros
 async function obtenerCategorias() {
     const sql = `
-        SELECT DISTINCT c.intidcategoria, c.vchcategoria, c.vchdescripcion
+        SELECT c.intidcategoria, c.vchcategoria, c.vchdescripcion, c.Imagen as imagen_blob
         FROM tblcategoria c
-        LEFT JOIN tbllibros l ON c.intidcategoria = l.intidcategoria
-        WHERE l.vchfolio IS NOT NULL
-        GROUP BY c.intidcategoria, c.vchcategoria, c.vchdescripcion
+        INNER JOIN tbllibros l ON c.intidcategoria = l.intidcategoria
+        GROUP BY c.intidcategoria, c.vchcategoria, c.vchdescripcion, c.Imagen
         ORDER BY c.vchcategoria ASC
     `;
     const [resultados] = await conexion.query(sql);
@@ -79,7 +49,7 @@ async function obtenerCategorias() {
     return resultados.map(categoria => ({
         intidcategoria: categoria.intidcategoria,
         vchcategoria: categoria.vchcategoria,
-        icono: obtenerIconoCategoria(categoria.vchcategoria)
+        icono: categoria.imagen_blob ? procesarImagen(categoria.imagen_blob) : null
     }));
 }
 
