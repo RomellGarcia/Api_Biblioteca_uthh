@@ -2,16 +2,16 @@ import nodemailer from 'nodemailer';
 import cron from 'node-cron';
 import pool from '../config/db.js';
 
-// ─── CONFIGURACIÓN DEL CORREO ────────────────────────────────────────────────
+//CONFIGURACIÓN DEL CORREO
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: process.env.MAIL_USER,  // ej. biblioteca.uthh@gmail.com
-        pass: process.env.MAIL_PASS   // contraseña de aplicación de 16 caracteres
+        user: process.env.MAIL_USER,
+        pass: process.env.MAIL_PASS  
     }
 });
 
-// ─── CONSULTA A LA BD ────────────────────────────────────────────────────────
+//CONSULTA A LA BD
 async function obtenerPrestamosPorVencer(dias) {
     const query = `
     SELECT 
@@ -31,14 +31,14 @@ async function obtenerPrestamosPorVencer(dias) {
     return rows;
 }
 
-// ─── ENVÍO DE CORREO ─────────────────────────────────────────────────────────
+//ENVÍO DE CORREO
 async function enviarNotificacion(prestamo, diasRestantes) {
     const diasTexto = diasRestantes === 1 ? '1 día' : `${diasRestantes} días`;
 
     const mailOptions = {
         from: `"Biblioteca UTHH" <${process.env.MAIL_USER}>`,
         to: prestamo.vchcorreo,
-        subject: `⚠️ Tu préstamo vence en ${diasTexto} — Biblioteca UTHH`,
+        subject: `Tu préstamo vence en ${diasTexto} — Biblioteca UTHH`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
                 <div style="background-color: #A02142; padding: 20px; text-align: center;">
@@ -78,7 +78,7 @@ async function enviarNotificacion(prestamo, diasRestantes) {
     console.log(`[Notificación] Correo enviado a ${prestamo.vchcorreo} — Ticket: ${prestamo.vchticket} — Vence en ${diasTexto}`);
 }
 
-// ─── PROCESO PRINCIPAL ───────────────────────────────────────────────────────
+//PROCESO PRINCIPAL
 async function procesarNotificaciones() {
     console.log(`[Notificaciones] Ejecutando proceso — ${new Date().toLocaleString('es-MX')}`);
 
@@ -100,7 +100,7 @@ async function procesarNotificaciones() {
     }
 }
 
-// ─── PROGRAMADOR CRON ────────────────────────────────────────────────────────
+//CRON
 function iniciarScheduler() {
     cron.schedule('0 8 * * *', procesarNotificaciones, {
         timezone: 'America/Mexico_City'
