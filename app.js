@@ -4,7 +4,7 @@ import cors from 'cors';
 import authRoutes from './src/routes/auth.routes.js';
 import librosRoutes from './src/routes/libros.routes.js';
 import prestamosRoutes from './src/routes/prestamos.routes.js';
-import { iniciarScheduler } from './services/notificaciones.service.js';
+import { iniciarScheduler } from './src/services/notificaciones.service.js';
 
 // Cargar variables de entorno
 dotenv.config();
