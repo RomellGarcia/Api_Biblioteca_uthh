@@ -4,6 +4,7 @@ import cors from 'cors';
 import authRoutes from './src/routes/auth.routes.js';
 import librosRoutes from './src/routes/libros.routes.js';
 import prestamosRoutes from './src/routes/prestamos.routes.js';
+import { iniciarScheduler } from './services/notificaciones.service.js';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -19,6 +20,8 @@ const allowedOrigins = [
     'https://romellgarcia.github.io', // GitHub Pages
     process.env.FRONTEND_URL     
 ].filter(Boolean);
+
+iniciarScheduler();
 
 app.use(cors({
     origin: function (origin, callback) {
