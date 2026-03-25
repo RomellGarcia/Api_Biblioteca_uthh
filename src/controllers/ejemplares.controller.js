@@ -28,3 +28,25 @@ export const postEjemplar = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
+// Para obtener un ejemplar antes de editarlo
+export const getEjemplarById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = await Modelo.obtenerPorId(id);
+        res.json({ success: true, data });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Para eliminar el ejemplar
+export const deleteEjemplar = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await Modelo.eliminarEjemplar(id);
+        res.json({ success: true, message: 'Ejemplar eliminado' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};

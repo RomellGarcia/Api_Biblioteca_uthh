@@ -33,3 +33,13 @@ export const insertarEjemplar = async (datos) => {
     const [res] = await conexion.query(sql, [vchcodigobarras, vchedicion, intidestado, intidubicacion, booldisponible, vchfolio]);
     return res;
 };
+
+export const obtenerPorId = async (id) => {
+    const [res] = await conexion.query("SELECT * FROM tblejemplares WHERE intidejemplar = ?", [id]);
+    return res[0];
+};
+
+export const eliminarEjemplar = async (id) => {
+    const [res] = await conexion.query("DELETE FROM tblejemplares WHERE intidejemplar = ?", [id]);
+    return res;
+};
