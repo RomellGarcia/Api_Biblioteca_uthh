@@ -185,7 +185,7 @@ async function registrarLibro(datos) {
 
 const eliminarLibro = async (folio) => {
     const query = 'DELETE FROM tbllibros WHERE vchfolio = ?';
-    const [result] = await pool.query(query, [folio]);
+    const [result] = await conexion.query(query, [folio]); 
     return result;
 };
 
