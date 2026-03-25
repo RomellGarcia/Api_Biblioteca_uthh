@@ -1,4 +1,4 @@
-import { v2 as cloudinary } from 'cloudinary';
+import cloudinary from '../config/cloudinary.js';
 import {
     obtenerLibrosRecomendados,
     obtenerCategorias,
@@ -110,7 +110,6 @@ async function postRegistrarLibro(req, res) {
         const datos = req.body;
         let urlImagenCloudinary = null;
 
-        // Si el usuario subió una imagen, la procesamos con Cloudinary
         if (req.file) {
             const resultadoCloudinary = await cloudinary.uploader.upload(req.file.path, {
                 folder: 'biblioteca_uthh/portadas',
