@@ -12,7 +12,7 @@ import {
 } from '../controllers/libros.controller.js';
 
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({ dest: '/tmp/' });
 
 router.get('/detalle', getDetalle);
 router.get('/recomendados/aleatorios', getRecomendados);
