@@ -62,7 +62,7 @@ async function obtenerPrestamos(filtro, busqueda) {
     }
 
     sql += " ORDER BY p.fecha_prestamo DESC";
-    
+
     const [resultados] = await conexion.query(sql, params);
     return resultados;
 }
@@ -105,13 +105,13 @@ async function buscarUsuarioConPrestamos(matricula) {
         WHERE u.intmatricula = ?
     `;
     const [resultados] = await conexion.query(sql, [matricula]);
-    
+
     if (resultados.length === 0) return null;
 
     const usuario = resultados[0];
     const sqlPendientes = "SELECT COUNT(*) as pendientes FROM tblprestamos WHERE intmatricula_usuario = ? AND booldevuelto = 0";
     const [resPendientes] = await conexion.query(sqlPendientes, [matricula]);
-    
+
     usuario.prestamos_pendientes = resPendientes && resPendientes[0] ? resPendientes[0].pendientes : 0;
     return usuario;
 }
@@ -121,7 +121,7 @@ async function generarTicket() {
     const anio = new Date().getFullYear();
     const sql = "SELECT vchticket FROM tblprestamos WHERE vchticket LIKE ? ORDER BY intidprestamo DESC LIMIT 1";
     const [resultados] = await conexion.query(sql, [`TK-${anio}-%`]);
-    
+
     let numero = 1;
     if (resultados.length > 0) {
         const partes = resultados[0].vchticket.split('-');
@@ -134,7 +134,7 @@ async function generarTicket() {
 async function registrarPrestamo(datos) {
     const { vchticket, intmatriculausuario, matriculaEmpleado, idRol, fechaprestamo, fechadevolucion, intidejemplar, vchobservaciones } = datos;
     const conn = await conexion.getConnection();
-    
+
     try {
         await conn.beginTransaction();
 
@@ -146,8 +146,13 @@ async function registrarPrestamo(datos) {
         }
 
         // Verificar empleado/admin
-        const tablaEmpleado = idRol === 1 ? 'tbladministrador' : 'tblempleados';
-        const [resE] = await conn.query(`SELECT intmatricula FROM ${tablaEmpleado} WHERE intmatricula = ?`, [matriculaEmpleado]);
+        let resE;
+        if (idRol === 1) {
+            [resE] = await conn.query("SELECT intmatricula FROM tbladministrador WHERE intmatricula = ?", [matriculaEmpleado]);
+        } else {
+            [resE] = await conn.query("SELECT intmatricula FROM tblusuarios WHERE intmatricula = ? AND intidrol = 2", [matriculaEmpleado]);
+        }
+
         if (resE.length === 0) {
             const tipo = idRol === 1 ? 'administrador' : 'empleado';
             await conn.rollback();
@@ -232,8 +237,8 @@ async function registrarDevolucion(datos) {
 
         // Obtener ID estado entrega
         const [resE] = await conn.query("SELECT intidestrega FROM tblestadoentrega WHERE vchestadoentrega = ?", [vchentrega]);
-        let intidestrega = (resE && resE.length > 0) ? resE[0].intidestrega : 
-                           (vchentrega === 'Bueno' ? 1 : vchentrega === 'Regular' ? 2 : 3);
+        let intidestrega = (resE && resE.length > 0) ? resE[0].intidestrega :
+            (vchentrega === 'Bueno' ? 1 : vchentrega === 'Regular' ? 2 : 3);
 
         const montoSancion = flmontosancion ? parseFloat(flmontosancion) : 0;
         const sancionCumplida = boolsancion ? 1 : 0;
@@ -282,7 +287,7 @@ const obtenerPrestamosUsuario = async (matricula) => {
         WHERE p.intmatricula_usuario = ?
         ORDER BY p.fecha_prestamo DESC
     `;
-    const [rows] = await conexion.query(sql, [matricula]); 
+    const [rows] = await conexion.query(sql, [matricula]);
     return rows;
 };
 
