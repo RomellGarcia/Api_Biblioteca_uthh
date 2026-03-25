@@ -13,7 +13,8 @@ import {
 
 import { 
     verificarAutenticacion, 
-    verificarRolAdminEmpleado 
+    verificarRolAdminEmpleado,
+    verificarPropietarioOMismoRol
 } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
@@ -26,7 +27,11 @@ router.get('/buscar-ejemplares', ...auth, getBuscarEjemplares);
 router.get('/buscar-usuario', ...auth, getBuscarUsuario);
 router.get('/generar-ticket', ...auth, getGenerarTicket);
 router.get('/buscar-por-ticket', ...auth, getBuscarPorTicket);
-router.get('/misprestamos/:matricula', verificarAutenticacion, getMisPrestamos);
+router.get('/misprestamos/:matricula', 
+    verificarAutenticacion, 
+    verificarPropietarioOMismoRol, 
+    getMisPrestamos
+);
 
 // Rutas POST
 router.post('/registrar', ...auth, postRegistrar);

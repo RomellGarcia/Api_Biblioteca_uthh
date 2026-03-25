@@ -51,4 +51,16 @@ function verificarRolAdminEmpleado(req, res, next) {
     next();
 }
 
-export { verificarAutenticacion, verificarRolAdminEmpleado };
+const verificarPropietarioOMismoRol = (req, res, next) => {
+    const { matricula } = req.params;
+    const usuarioLogueado = req.usuario; 
+    if (usuarioLogueado.idrol == 1 || usuarioLogueado.idrol == 2 || usuarioLogueado.matricula == matricula) {
+        next();
+    } else {
+        return res.status(403).json({ 
+            mensaje: "No tienes permiso para ver los préstamos de otro usuario" 
+        });
+    }
+};
+
+export { verificarAutenticacion, verificarRolAdminEmpleado, verificarPropietarioOMismoRol };
