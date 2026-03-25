@@ -3,9 +3,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const pool = createPool({
-  password: process.env.DB_PASSWORD || '',
+  host: process.env.DB_HOST, // QUITA EL || 'localhost'
+  user: process.env.DB_USER, // QUITA EL || 'root'
+  password: process.env.DB_PASSWORD, // QUITA EL || ''
   database: process.env.DB_NAME,
-  port: parseInt(process.env.DB_PORT) || 3306, // Convertir a número siempre
+  port: parseInt(process.env.DB_PORT) || 3306,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
