@@ -1,4 +1,4 @@
-import cloudinary from '../config/cloudinary.js';
+import { configurarCloudinary } from '../config/cloudinary.js';
 import {
     obtenerLibrosRecomendados,
     obtenerCategorias,
