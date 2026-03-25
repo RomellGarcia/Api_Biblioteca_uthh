@@ -3,9 +3,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const pool = createPool({
-  host: process.env.DB_HOST, // QUITA EL || 'localhost'
-  user: process.env.DB_USER, // QUITA EL || 'root'
-  password: process.env.DB_PASSWORD, // QUITA EL || ''
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   port: parseInt(process.env.DB_PORT) || 3306,
   waitForConnections: true,
@@ -15,7 +15,7 @@ const pool = createPool({
   charset: 'utf8mb4'
 });
 
-// Prueba de conexión simplificada para evitar bloqueos en el despliegue
+// Prueba de conexión
 pool.getConnection()
   .then(connection => {
     console.log('Conectado a MySQL - Base de datos:', process.env.DB_NAME);
