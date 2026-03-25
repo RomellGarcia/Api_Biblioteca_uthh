@@ -39,7 +39,9 @@ async function obtenerCategorias() {
         intidcategoria: categoria.intidcategoria,
         vchcategoria: categoria.vchcategoria,
         vchdescripcion: categoria.vchdescripcion,
-        icono: categoria.vchimagen || null
+        icono: categoria.imagen
+            ? `data:image/png;base64,${Buffer.from(categoria.imagen).toString('base64')}`
+            : null
     }));
 }
 
