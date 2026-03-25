@@ -192,14 +192,9 @@ async function putActualizarLibro(req, res) {
     try {
         const { folio } = req.params;
         const { vchtitulo, vchautor, intidcategoria, intanio, vchsinopsis, vcheditorial, vchisbn, vchimagen } = req.body;
-
-        // 1. Usamos la imagen actual que viene del body por defecto
         let urlImagenFinal = vchimagen || null;
-
-        // 2. Si el usuario subió una foto nueva, Multer la procesa
         if (req.file) {
             const cloudinaryConfigurado = configurarCloudinary();
-            // Subimos el archivo temporal a Cloudinary
             const resultadoCloudinary = await cloudinaryConfigurado.uploader.upload(req.file.path, {
                 folder: 'biblioteca_uthh/portadas'
             });
@@ -211,7 +206,7 @@ async function putActualizarLibro(req, res) {
             intanio: intanio ? parseInt(intanio) : null,
             vchisbn, vchsinopsis,
             intidcategoria: parseInt(intidcategoria),
-            vchimagen: urlImagenFinal // <--- Aquí ya no fallará porque la variable existe
+            vchimagen: urlImagenFinal 
         };
 
         const resultado = await actualizarLibroModelo(folio, datosActualizados);
