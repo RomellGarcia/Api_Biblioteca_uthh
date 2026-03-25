@@ -188,50 +188,40 @@ const eliminarLibroController = async (req, res) => {
 };
 
 // PUT /api/libros/actualizar/:folio
-// PUT /api/libros/actualizar/:folio
 async function putActualizarLibro(req, res) {
     try {
         const { folio } = req.params;
         const { vchtitulo, vchautor, intidcategoria, intanio, vchsinopsis, vcheditorial, vchisbn, vchimagen } = req.body;
 
-        // 1. Empezamos con la imagen que ya tiene el libro (la de Nightwing)
+        // 1. Empezamos con la imagen que ya tiene el libro (vchimagen viene del body)
         let urlImagenFinal = vchimagen || null;
 
-        // 2. Si subiste un archivo nuevo, lo subimos a Cloudinary
+        // 2. Si Multer recibió un archivo en el campo 'imagen'
         if (req.file) {
             const cloudinaryConfigurado = configurarCloudinary();
             const resultadoCloudinary = await cloudinaryConfigurado.uploader.upload(req.file.path, {
-                folder: 'biblioteca_uthh/portadas',
-                resource_type: 'image'
+                folder: 'biblioteca_uthh/portadas'
             });
             urlImagenFinal = resultadoCloudinary.secure_url;
         }
 
         const datosActualizados = {
-            vchtitulo, 
-            vchautor, 
-            vcheditorial,
+            vchtitulo, vchautor, vcheditorial,
             intanio: intanio ? parseInt(intanio) : null,
-            vchisbn, 
-            vchsinopsis,
+            vchisbn, vchsinopsis,
             intidcategoria: parseInt(intidcategoria),
-            vchimagen: urlImagenFinal // <--- Ahora la variable SÍ existe
+            vchimagen: urlImagenFinal // <--- Usamos la variable que SÍ existe
         };
 
-        // 3. Mandamos los datos al modelo
         const resultado = await actualizarLibroModelo(folio, datosActualizados);
 
         if (resultado.affectedRows > 0) {
-            res.json({ 
-                success: true, 
-                message: 'Libro actualizado correctamente', 
-                urlImagen: urlImagenFinal 
-            });
+            res.json({ success: true, message: 'Libro actualizado', urlImagen: urlImagenFinal });
         } else {
             res.status(404).json({ success: false, error: 'No se encontró el libro' });
         }
     } catch (error) {
-        console.error("Error al actualizar:", error);
+        console.error("Error en servidor:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 }
