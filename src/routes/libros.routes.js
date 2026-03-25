@@ -25,6 +25,6 @@ router.get('/categoria/:id', getCategoria);
 router.get('/', getCatalogo);
 router.post('/registrar', upload.single('imagen'), postRegistrarLibro);
 router.delete('/eliminar/:folio', eliminarLibroController);
-router.put('/actualizar/:folio', upload.single('vchimagen'), putActualizarLibro);
+router.put('/actualizar/:folio', upload.single('imagen'), putActualizarLibro);
 
 export default router;
