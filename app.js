@@ -25,22 +25,22 @@ iniciarScheduler();
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Permitir peticiones sin origen
         if (!origin) return callback(null, true);
         
-        // Verificamos si el origen está en la lista o es un subdominio de github.io
+        // Verifica contra la lista y también dominios de GitHub
         const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.github.io');
         
         if (isAllowed) {
             callback(null, true);
         } else {
-            console.log('Origen bloqueado por CORS:', origin);
-            callback(new Error('No permitido por CORS'));
+            // Log para debuggear en los logs de Vercel
+            console.error('CORS Bloqueado para:', origin);
+            callback(null, false); // No lances un Error, solo retorna false
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json());
