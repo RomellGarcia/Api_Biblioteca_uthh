@@ -260,7 +260,7 @@ async function registrarDevolucion(datos) {
 }
 
 // Obtener préstamos de un usuario específico
-export const obtenerPrestamosUsuario = async (matricula) => {
+const obtenerPrestamosUsuario = async (matricula) => {
     const sql = `
         SELECT 
             p.intidprestamo, p.vchticket, p.fecha_prestamo, p.fecha_devolucion,
@@ -282,7 +282,7 @@ export const obtenerPrestamosUsuario = async (matricula) => {
         WHERE p.intmatricula_usuario = ?
         ORDER BY p.fecha_prestamo DESC
     `;
-    const [rows] = await db.query(sql, [matricula]);
+    const [rows] = await conexion.query(sql, [matricula]); 
     return rows;
 };
 
