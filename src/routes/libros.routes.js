@@ -9,7 +9,8 @@ import {
     getDetalle, 
     getCategoria,
     postRegistrarLibro,
-    eliminarLibroController
+    eliminarLibroController,
+    putActualizarLibro
 } from '../controllers/libros.controller.js';
 
 const router = express.Router();
@@ -24,5 +25,6 @@ router.get('/categoria/:id', getCategoria);
 router.get('/', getCatalogo);
 router.post('/registrar', upload.single('imagen'), postRegistrarLibro);
 router.delete('/eliminar/:folio', eliminarLibroController);
+router.put('/actualizar/:folio', upload.single('vchimagen'), putActualizarLibro);
 
 export default router;

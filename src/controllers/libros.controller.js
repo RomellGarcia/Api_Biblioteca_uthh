@@ -186,6 +186,50 @@ const eliminarLibroController = async (req, res) => {
     }
 };
 
+// PUT /api/libros/actualizar/:folio
+async function putActualizarLibro(req, res) {
+    try {
+        const { folio } = req.params;
+        const { vchtitulo, vchautor, intidcategoria, intanio, vchsinopsis, vcheditorial, vchisbn } = req.body;
+
+        let urlImagenCloudinary = req.body.vchimagen || null;
+
+        // Si el usuario subió una imagen nueva, la mandamos a Cloudinary
+        if (req.file) {
+            const cloudinaryConfigurado = configurarCloudinary();
+            const resultadoCloudinary = await cloudinaryConfigurado.uploader.upload(req.file.path, {
+                folder: 'biblioteca_uthh/portadas',
+                resource_type: 'image'
+            });
+            urlImagenCloudinary = resultadoCloudinary.secure_url;
+        }
+
+        const datosActualizados = {
+            vchtitulo,
+            vchautor,
+            vcheditorial,
+            intanio: intanio ? parseInt(intanio) : null,
+            vchisbn,
+            vchsinopsis,
+            intidcategoria: parseInt(intidcategoria),
+            vchimagen: urlImagenCloudinary
+        };
+
+        // Necesitas tener esta función 'actualizarLibroModelo' en tu libros.model.js
+        const { actualizarLibroModelo } = await import('../models/libros.model.js');
+        const resultado = await actualizarLibroModelo(folio, datosActualizados);
+
+        if (resultado.affectedRows > 0) {
+            res.json({ success: true, message: 'Libro actualizado correctamente', urlImagen: urlImagenCloudinary });
+        } else {
+            res.status(404).json({ success: false, error: 'No se encontró el libro para actualizar' });
+        }
+    } catch (error) {
+        console.error("Error al actualizar:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+}
+
 export {
     getRecomendados,
     getCategorias,
@@ -195,5 +239,6 @@ export {
     getDetalle,
     getCategoria,
     postRegistrarLibro,
-    eliminarLibroController
+    eliminarLibroController,
+    putActualizarLibro
 };

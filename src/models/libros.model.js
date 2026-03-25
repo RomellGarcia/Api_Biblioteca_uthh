@@ -189,6 +189,20 @@ const eliminarLibro = async (folio) => {
     return result;
 };
 
+export const actualizarLibroModelo = async (folio, datos) => {
+    const sql = `UPDATE tbllibros SET 
+                 vchtitulo = ?, vchautor = ?, vcheditorial = ?, 
+                 intanio = ?, vchisbn = ?, vchsinopsis = ?, 
+                 intidcategoria = ?, vchimagen = ? 
+                 WHERE vchfolio = ?`;
+    const [res] = await conexion.query(sql, [
+        datos.vchtitulo, datos.vchautor, datos.vcheditorial,
+        datos.intanio, datos.vchisbn, datos.vchsinopsis,
+        datos.intidcategoria, datos.vchimagen, folio
+    ]);
+    return res;
+};
+
 export {
     obtenerLibrosRecomendados,
     obtenerCategorias,
@@ -198,5 +212,6 @@ export {
     obtenerDetalle,
     obtenerPorCategoria,
     registrarLibro,
-    eliminarLibro
+    eliminarLibro,
+    actualizarLibroModelo
 };
