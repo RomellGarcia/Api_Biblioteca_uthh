@@ -193,12 +193,13 @@ async function putActualizarLibro(req, res) {
         const { folio } = req.params;
         const { vchtitulo, vchautor, intidcategoria, intanio, vchsinopsis, vcheditorial, vchisbn, vchimagen } = req.body;
 
-        // 1. Empezamos con la imagen que ya tiene el libro (vchimagen viene del body)
+        // 1. Usamos la imagen actual que viene del body por defecto
         let urlImagenFinal = vchimagen || null;
 
-        // 2. Si Multer recibió un archivo en el campo 'imagen'
+        // 2. Si el usuario subió una foto nueva, Multer la procesa
         if (req.file) {
             const cloudinaryConfigurado = configurarCloudinary();
+            // Subimos el archivo temporal a Cloudinary
             const resultadoCloudinary = await cloudinaryConfigurado.uploader.upload(req.file.path, {
                 folder: 'biblioteca_uthh/portadas'
             });
@@ -210,18 +211,18 @@ async function putActualizarLibro(req, res) {
             intanio: intanio ? parseInt(intanio) : null,
             vchisbn, vchsinopsis,
             intidcategoria: parseInt(intidcategoria),
-            vchimagen: urlImagenFinal // <--- Usamos la variable que SÍ existe
+            vchimagen: urlImagenFinal // <--- Aquí ya no fallará porque la variable existe
         };
 
         const resultado = await actualizarLibroModelo(folio, datosActualizados);
 
         if (resultado.affectedRows > 0) {
-            res.json({ success: true, message: 'Libro actualizado', urlImagen: urlImagenFinal });
+            res.json({ success: true, message: 'Libro actualizado correctamente', urlImagen: urlImagenFinal });
         } else {
-            res.status(404).json({ success: false, error: 'No se encontró el libro' });
+            res.status(404).json({ success: false, error: 'No se encontró el libro en la base de datos' });
         }
     } catch (error) {
-        console.error("Error en servidor:", error);
+        console.error("Error en Vercel:", error);
         res.status(500).json({ success: false, error: error.message });
     }
 }
