@@ -9,7 +9,7 @@ import {
     getDetalle, 
     getCategoria,
     postRegistrarLibro,
-    eliminarLibro
+    eliminarLibroController
 } from '../controllers/libros.controller.js';
 
 const router = express.Router();
