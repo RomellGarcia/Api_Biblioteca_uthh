@@ -51,4 +51,4 @@ function verificarRolAdminEmpleado(req, res, next) {
     next();
 }
 
-export { verificarAutenticacion, verificarRolAdminEmpleado };
+export { verificarAutenticacion, verificarRolAdminEmpleado }; 
