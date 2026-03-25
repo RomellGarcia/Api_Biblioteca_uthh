@@ -177,18 +177,25 @@ async function postDevolucion(req, res) {
 
     try {
         const resultado = await registrarDevolucion(req.body);
-        if (!resultado.ok) return res.json({ success: false, mensaje: resultado.mensaje });
         
+        if (!resultado || !resultado.ok) {
+            return res.json({ success: false, mensaje: resultado?.mensaje || 'Error desconocido en la devolución' });
+        }
+        
+        // Aseguramos que montoSancion sea un número antes de usar toFixed
+        const monto = Number(resultado.montoSancion) || 0;
+
         res.json({
             success: true,
             mensaje: 'Devolución registrada exitosamente',
             data: {
                 iddevolucion: resultado.iddevolucion,
-                sancion_aplicada: resultado.montoSancion > 0,
-                monto_sancion: resultado.montoSancion.toFixed(2)
+                sancion_aplicada: monto > 0,
+                monto_sancion: monto.toFixed(2)
             }
         });
     } catch (error) {
+        console.error("Error en postDevolucion:", error);
         res.status(500).json({ success: false, mensaje: 'Error al registrar devolución', error: error.message });
     }
 }
