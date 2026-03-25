@@ -5,6 +5,7 @@ import authRoutes from './src/routes/auth.routes.js';
 import librosRoutes from './src/routes/libros.routes.js';
 import prestamosRoutes from './src/routes/prestamos.routes.js';
 import { iniciarScheduler } from './src/services/notificaciones.service.js';
+import ejemplaresRoutes from './src/routes/ejemplares.routes.js';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -46,10 +47,12 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+
 // Rutas
 app.use('/api/auth', authRoutes);
 app.use('/api/libros', librosRoutes);
 app.use('/api/prestamos', prestamosRoutes);
+app.use('/api/ejemplares', ejemplaresRoutes);
 
 // Ruta de salud
 app.get('/api/health', (req, res) => {
