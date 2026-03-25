@@ -43,3 +43,25 @@ export const eliminarEjemplar = async (id) => {
     const [res] = await conexion.query("DELETE FROM tblejemplares WHERE intidejemplar = ?", [id]);
     return res;
 };
+
+export const actualizarEjemplar = async (id, datos) => {
+    const { vchcodigobarras, vchedicion, intidestado, intidubicacion, booldisponible } = datos;
+    const sql = `
+        UPDATE tblejemplares 
+        SET vchcodigobarras = ?, 
+            vchedicion = ?, 
+            intidestado = ?, 
+            intidubicacion = ?, 
+            booldisponible = ?
+        WHERE intidejemplar = ?`;
+    
+    const [res] = await conexion.query(sql, [
+        vchcodigobarras, 
+        vchedicion, 
+        intidestado, 
+        intidubicacion, 
+        booldisponible, 
+        id
+    ]);
+    return res;
+};

@@ -50,3 +50,18 @@ export const deleteEjemplar = async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 };
+
+export const putEjemplar = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const resultado = await Modelo.actualizarEjemplar(id, req.body);
+        
+        if (resultado.affectedRows > 0) {
+            res.json({ success: true, message: 'Ejemplar actualizado correctamente' });
+        } else {
+            res.status(404).json({ success: false, message: 'No se encontró el ejemplar' });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
