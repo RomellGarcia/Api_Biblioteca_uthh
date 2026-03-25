@@ -63,7 +63,6 @@ async function obtenerLibrosMasPedidos() {
         color_fondo: !libro.vchimagen ? colorAleatorio() : undefined
     }));
 }
-
 // Obtener catálogo completo
 async function obtenerCatalogo() {
     const sql = `
