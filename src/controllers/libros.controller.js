@@ -107,6 +107,27 @@ async function getCategoria(req, res) {
 // POST /api/libros/registrar
 async function postRegistrarLibro(req, res) {
     try {
+        const { vchfolio, vchtitulo, vchautor, intidcategoria, intanio } = req.body;
+
+        // ASEGURAMIENTO: Campos obligatorios
+        if (!vchfolio || !vchtitulo || !vchautor || !intidcategoria) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Faltan campos obligatorios (Folio, Título, Autor o Categoría).' 
+            });
+        }
+
+        // ASEGURAMIENTO: Validar Año
+        if (intanio) {
+            const anioNum = parseInt(intanio);
+            const añoActual = new Date().getFullYear();
+            if (isNaN(anioNum) || anioNum < 1000 || anioNum > añoActual) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'El año proporcionado no es válido.' 
+                });
+            }
+        }
         const datos = req.body;
         let urlImagenCloudinary = null;
 
