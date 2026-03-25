@@ -7,19 +7,17 @@ import prestamosRoutes from './src/routes/prestamos.routes.js';
 import { iniciarScheduler } from './src/services/notificaciones.service.js';
 import ejemplaresRoutes from './src/routes/ejemplares.routes.js';
 
-// Cargar variables de entorno
 dotenv.config();
 
 const app = express();
 
-// Configuración de CORS
 const allowedOrigins = [
-    'http://localhost:3000',      
-    'http://127.0.0.1:3000',   
-    'http://localhost:5500',    
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5500',
     'http://127.0.0.1:5500',
-    'https://romellgarcia.github.io', // GitHub Pages
-    process.env.FRONTEND_URL     
+    'https://romellgarcia.github.io',
+    process.env.FRONTEND_URL
 ].filter(Boolean);
 
 iniciarScheduler();
@@ -27,16 +25,12 @@ iniciarScheduler();
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) return callback(null, true);
-        
-        // Verifica contra la lista y también dominios de GitHub
         const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.github.io');
-        
         if (isAllowed) {
             callback(null, true);
         } else {
-            // Log para debuggear en los logs de Vercel
             console.error('CORS Bloqueado para:', origin);
-            callback(null, false); // No lances un Error, solo retorna false
+            callback(null, false);
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -44,22 +38,22 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// Rutas que usan Multer (multipart/form-data) van ANTES de los body parsers
+app.use('/api/libros', librosRoutes);
+
+// Body parsers para el resto de rutas
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-// Rutas
+// Rutas que NO usan Multer
 app.use('/api/auth', authRoutes);
-app.use('/api/libros', librosRoutes);
 app.use('/api/prestamos', prestamosRoutes);
 app.use('/api/ejemplares', ejemplaresRoutes);
 
-// Ruta de salud
 app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Servidor funcionando correctamente en la nube' });
 });
 
-// Middleware para capturar errores
 app.use((err, req, res, next) => {
     console.error(err.stack);
     res.status(500).json({
@@ -69,7 +63,6 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Arranque del servidor
 const PORT = process.env.PORT || 4000;
 
 if (process.env.NODE_ENV !== 'production') {
