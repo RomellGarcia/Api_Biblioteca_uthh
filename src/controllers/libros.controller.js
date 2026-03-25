@@ -7,7 +7,8 @@ import {
     buscarLibros,
     obtenerDetalle,
     obtenerPorCategoria,
-    registrarLibro
+    registrarLibro,
+    eliminarLibro
 } from '../models/libros.model.js';
 
 // GET /api/libros/recomendados/aleatorios
