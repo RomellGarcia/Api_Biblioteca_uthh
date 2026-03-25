@@ -1,5 +1,4 @@
 import conexion from '../config/db.js';
-
 // Obtener todos los estados (Bueno, Regular, Malo)
 export const obtenerEstados = async () => {
     const [res] = await conexion.query("SELECT intidestado as id, vchestadolibro as nombre FROM tblestado");
