@@ -25,6 +25,16 @@ router.get('/categoria/:id', getCategoria);
 router.get('/', getCatalogo);
 router.post('/registrar', upload.single('imagen'), postRegistrarLibro);
 router.delete('/eliminar/:folio', eliminarLibroController);
-router.put('/actualizar/:folio', upload.single('imagen'), putActualizarLibro);
-
+router.put('/actualizar/:folio', (req, res, next) => {
+    upload.single('imagen')(req, res, (err) => {
+        if (err && err.code === 'LIMIT_UNEXPECTED_FILE') {
+            // No había archivo, continuar sin imagen
+            next();
+        } else if (err) {
+            return res.status(400).json({ success: false, error: err.message });
+        } else {
+            next();
+        }
+    });
+}, putActualizarLibro);
 export default router;
