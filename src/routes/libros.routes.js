@@ -26,15 +26,12 @@ router.get('/', getCatalogo);
 router.post('/registrar', upload.single('imagen'), postRegistrarLibro);
 router.delete('/eliminar/:folio', eliminarLibroController);
 router.put('/actualizar/:folio', (req, res, next) => {
-    upload.single('imagen')(req, res, (err) => {
-        if (err && err.code === 'LIMIT_UNEXPECTED_FILE') {
-            // No había archivo, continuar sin imagen
-            next();
-        } else if (err) {
-            return res.status(400).json({ success: false, error: err.message });
-        } else {
-            next();
-        }
-    });
+    // Si viene con archivo, usar Multer; si no, parsear JSON
+    const contentType = req.headers['content-type'] || '';
+    if (contentType.includes('multipart/form-data')) {
+        upload.single('imagen')(req, res, next);
+    } else {
+        express.json()(req, res, next);
+    }
 }, putActualizarLibro);
 export default router;
