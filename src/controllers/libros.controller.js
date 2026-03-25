@@ -111,7 +111,11 @@ async function postRegistrarLibro(req, res) {
         let urlImagenCloudinary = null;
 
         if (req.file) {
-            const resultadoCloudinary = await cloudinary.uploader.upload(req.file.path, {
+            // 2. ACTIVAMOS LAS LLAVES JUSTO AQUÍ
+            const cloudinaryConfigurado = configurarCloudinary();
+
+            // 3. SUBIMOS USANDO LA CONFIGURACIÓN RECIÉN CARGADA
+            const resultadoCloudinary = await cloudinaryConfigurado.uploader.upload(req.file.path, {
                 folder: 'biblioteca_uthh/portadas',
                 resource_type: 'image'
             });
@@ -127,8 +131,9 @@ async function postRegistrarLibro(req, res) {
             vchisbn: datos.vchisbn || null,
             vchsinopsis: datos.vchsinopsis || null,
             intidcategoria: parseInt(datos.intidcategoria),
-            vchimagen: urlImagenCloudinary // Guardamos la URL de Cloudinary
+            vchimagen: urlImagenCloudinary
         };
+
         const resultado = await registrarLibro(nuevoLibro);
 
         res.status(201).json({
