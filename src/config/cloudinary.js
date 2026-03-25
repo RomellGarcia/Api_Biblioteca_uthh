@@ -1,19 +1,20 @@
 import { v2 as cloudinary } from 'cloudinary';
-import dotenv from 'dotenv';
 
-// 1. Forzamos la carga (aunque Vercel lo hace, esto asegura el orden)
-dotenv.config();
+// No lo configuramos aquí arriba globalmente porque process.env 
+// a veces llega tarde en las funciones Serverless de Vercel.
 
-// 2. Diagnóstico: Si esto sale en el log, sabremos si Vercel le pasó las llaves
-console.log("Revisando credenciales en el servidor:", {
-    cloud: process.env.CLOUDINARY_CLOUD_NAME ? "OK" : "VACÍO",
-    key: process.env.CLOUDINARY_API_KEY ? "OK" : "VACÍO"
-});
+const configurarCloudinary = () => {
+    if (!process.env.CLOUDINARY_API_KEY) {
+        throw new Error("Las variables de Cloudinary NO están llegando al servidor");
+    }
 
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key:    process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
+    cloudinary.config({
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key:    process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
+    });
+    return cloudinary;
+};
 
+export { configurarCloudinary };
 export default cloudinary;
