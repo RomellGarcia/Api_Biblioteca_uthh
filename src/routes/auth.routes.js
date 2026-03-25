@@ -5,7 +5,8 @@ import {
     login, verificar, logout, getUsuarios, getAdministradores, 
     getEmpleados, deleteUsuario, getPerfil, putPerfil, 
     getUsuarioPorMatricula, getRoles, postActualizarUsuario, 
-    registro, getTodosLosUsuarios 
+    registro, getTodosLosUsuarios,
+    registroPublico 
 } from '../controllers/auth.controller.js';
 
 import { verificarAutenticacion, verificarRolAdminEmpleado } from '../middlewares/auth.middleware.js';

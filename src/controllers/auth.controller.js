@@ -320,7 +320,7 @@ async function registro(req, res) {
 }
 
 // POST /api/auth/registro-publico (sin autenticación, solo rol 3)
-async function registroPublico(req, res) {
+export async function registroPublico(req, res) {
     // Forzar rol 3 (usuario/lector) para evitar que se creen admins
     req.body.intidrol = 3;
     return registro(req, res);
