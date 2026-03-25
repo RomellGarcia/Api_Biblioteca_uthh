@@ -188,27 +188,45 @@ const eliminarLibroController = async (req, res) => {
 };
 
 // PUT /api/libros/actualizar/:folio
+// PUT /api/libros/actualizar/:folio
 async function putActualizarLibro(req, res) {
     try {
         const { folio } = req.params;
-        const { vchtitulo, vchautor, intidcategoria, intanio, vchsinopsis, vcheditorial, vchisbn } = req.body;
+        const { vchtitulo, vchautor, intidcategoria, intanio, vchsinopsis, vcheditorial, vchisbn, vchimagen } = req.body;
 
-        // ... (lógica de Cloudinary)
+        // 1. Empezamos con la imagen que ya tiene el libro (la de Nightwing)
+        let urlImagenFinal = vchimagen || null;
+
+        // 2. Si subiste un archivo nuevo, lo subimos a Cloudinary
+        if (req.file) {
+            const cloudinaryConfigurado = configurarCloudinary();
+            const resultadoCloudinary = await cloudinaryConfigurado.uploader.upload(req.file.path, {
+                folder: 'biblioteca_uthh/portadas',
+                resource_type: 'image'
+            });
+            urlImagenFinal = resultadoCloudinary.secure_url;
+        }
 
         const datosActualizados = {
-            vchtitulo, vchautor, vcheditorial,
+            vchtitulo, 
+            vchautor, 
+            vcheditorial,
             intanio: intanio ? parseInt(intanio) : null,
-            vchisbn, vchsinopsis,
+            vchisbn, 
+            vchsinopsis,
             intidcategoria: parseInt(intidcategoria),
-            vchimagen: urlImagenCloudinary
+            vchimagen: urlImagenFinal // <--- Ahora la variable SÍ existe
         };
 
-        // BORRA LA LÍNEA DEL await import(...)
-        // Llama directamente a la función:
+        // 3. Mandamos los datos al modelo
         const resultado = await actualizarLibroModelo(folio, datosActualizados);
 
         if (resultado.affectedRows > 0) {
-            res.json({ success: true, message: 'Libro actualizado correctamente' });
+            res.json({ 
+                success: true, 
+                message: 'Libro actualizado correctamente', 
+                urlImagen: urlImagenFinal 
+            });
         } else {
             res.status(404).json({ success: false, error: 'No se encontró el libro' });
         }
