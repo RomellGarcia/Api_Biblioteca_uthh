@@ -29,7 +29,7 @@ async function obtenerCategorias() {
     const sql = `
         SELECT c.intidcategoria, c.vchcategoria, c.vchdescripcion, c.vchimagen
         FROM tblcategoria c
-        LEFT JOIN tbllibros l ON c.intidcategoria = l.intidcategoria
+        INNER JOIN tbllibros l ON c.intidcategoria = l.intidcategoria
         GROUP BY c.intidcategoria, c.vchcategoria, c.vchdescripcion, c.vchimagen
         ORDER BY c.vchcategoria ASC
     `;
