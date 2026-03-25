@@ -6,7 +6,8 @@ import {
     registrarPrestamo,
     pagarSancion,
     buscarPorTicket,
-    registrarDevolucion
+    registrarDevolucion,
+    obtenerPrestamosUsuario
 } from '../models/prestamos.model.js';
 
 // GET /api/prestamos
