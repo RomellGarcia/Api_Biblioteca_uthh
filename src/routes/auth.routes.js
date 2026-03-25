@@ -17,6 +17,9 @@ router.post('/login', login);
 router.get('/verificar', verificar);
 router.post('/logout', logout);
 
+// Registro público (solo crea usuarios/lectores, sin token)
+router.post('/registro-publico', registroPublico);
+
 //Rutas Protegidas (Requieren Token)
 router.get('/perfil', verificarAutenticacion, getPerfil);
 router.put('/perfil', verificarAutenticacion, putPerfil);
