@@ -74,7 +74,7 @@ async function buscarEjemplares(termino) {
         SELECT 
             e.intidejemplar, e.vchcodigobarras, e.vchedicion, e.vchfolio,
             e.booldisponible, e.intidestado,
-            l.vchtitulo, l.vchautor, l.vcheditorial, l.vchisbn, l.imagen, l.intanio,
+            l.vchtitulo, l.vchautor, l.vcheditorial, l.vchisbn, l.vchimagen, l.intanio,
             c.vchcategoria,
             u.vchubicacion, u.vchdescripcion AS descripcion_ubicacion,
             es.vchestadolibro,

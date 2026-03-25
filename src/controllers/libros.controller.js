@@ -1,3 +1,4 @@
+import { v2 as cloudinary } from 'cloudinary';
 import {
     obtenerLibrosRecomendados,
     obtenerCategorias,
@@ -5,7 +6,8 @@ import {
     obtenerCatalogo,
     buscarLibros,
     obtenerDetalle,
-    obtenerPorCategoria
+    obtenerPorCategoria,
+    registrarLibro
 } from '../models/libros.model.js';
 
 // GET /api/libros/recomendados/aleatorios
@@ -69,16 +71,16 @@ async function getDetalle(req, res) {
 
     try {
         const libro = await obtenerDetalle(folio);
-        
+
         // Validamos si no existe o si es un arreglo vacío
         if (!libro || (Array.isArray(libro) && libro.length === 0)) {
             return res.status(404).json({ success: false, error: 'Libro no encontrado' });
         }
-        
+
         // Si el modelo devuelve un arreglo, sacamos el primer elemento
         const datosLibro = Array.isArray(libro) ? libro[0] : libro;
         res.json({ success: true, data: datosLibro });
-        
+
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -102,12 +104,57 @@ async function getCategoria(req, res) {
     }
 }
 
-export { 
-    getRecomendados, 
-    getCategorias, 
-    getMasPedidos, 
-    getCatalogo, 
-    getBuscar, 
-    getDetalle, 
-    getCategoria 
+// POST /api/libros/registrar
+async function postRegistrarLibro(req, res) {
+    try {
+        const datos = req.body;
+        let urlImagenCloudinary = null;
+
+        // Si el usuario subió una imagen, la procesamos con Cloudinary
+        if (req.file) {
+            const resultadoCloudinary = await cloudinary.uploader.upload(req.file.path, {
+                folder: 'biblioteca_uthh/portadas',
+                resource_type: 'image'
+            });
+            urlImagenCloudinary = resultadoCloudinary.secure_url;
+        }
+
+        const nuevoLibro = {
+            vchfolio: datos.vchfolio,
+            vchtitulo: datos.vchtitulo,
+            vchautor: datos.vchautor,
+            vcheditorial: datos.vcheditorial || null,
+            intanio: datos.intanio ? parseInt(datos.intanio) : null,
+            vchisbn: datos.vchisbn || null,
+            vchsinopsis: datos.vchsinopsis || null,
+            intidcategoria: parseInt(datos.intidcategoria),
+            vchimagen: urlImagenCloudinary // Guardamos la URL de Cloudinary
+        };
+        const resultado = await registrarLibro(nuevoLibro);
+
+        res.status(201).json({
+            success: true,
+            message: 'Libro registrado correctamente',
+            id: resultado.insertId,
+            urlImagen: urlImagenCloudinary
+        });
+
+    } catch (error) {
+        console.error("Error en registro:", error);
+        res.status(500).json({
+            success: false,
+            error: 'No se pudo registrar el libro: ' + error.message
+        });
+    }
+}
+
+export {
+    getRecomendados,
+    getCategorias,
+    getMasPedidos,
+    getCatalogo,
+    getBuscar,
+    getDetalle,
+    getCategoria,
+    postRegistrarLibro
 };

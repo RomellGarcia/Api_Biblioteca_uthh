@@ -42,19 +42,11 @@ async function getPrestamos(req, res) {
 async function getBuscarEjemplares(req, res) {
     const { termino = '' } = req.query;
     if (termino.length < 1) return res.json({ success: true, libros: [], total: 0 });
-
     try {
         const ejemplares = await buscarEjemplares(termino);
         const librosAgrupados = {};
-
         ejemplares.forEach(ejemplar => {
             const folio = ejemplar.vchfolio;
-            let imagenBase64 = null;
-            if (ejemplar.imagen) {
-                // Asumimos que el modelo nos devolverá el Buffer si hay imagen
-                imagenBase64 = `data:image/webp;base64,${Buffer.from(ejemplar.imagen).toString('base64')}`;
-            }
-
             if (!librosAgrupados[folio]) {
                 librosAgrupados[folio] = {
                     vchfolio: folio,
@@ -63,7 +55,7 @@ async function getBuscarEjemplares(req, res) {
                     vcheditorial: ejemplar.vcheditorial,
                     vchisbn: ejemplar.vchisbn,
                     intanio: ejemplar.intanio,
-                    imagen: imagenBase64,
+                    imagen: ejemplar.vchimagen || null,
                     vchcategoria: ejemplar.vchcategoria,
                     ejemplares_disponibles: ejemplar.ejemplares_disponibles,
                     ejemplares: []
@@ -78,7 +70,6 @@ async function getBuscarEjemplares(req, res) {
                 vchestadolibro: ejemplar.vchestadolibro
             });
         });
-
         res.json({ success: true, libros: Object.values(librosAgrupados), total: Object.keys(librosAgrupados).length });
     } catch (error) {
         res.status(500).json({ success: false, mensaje: 'Error al buscar ejemplares', error: error.message });
