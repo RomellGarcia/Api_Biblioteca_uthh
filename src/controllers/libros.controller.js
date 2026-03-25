@@ -109,7 +109,6 @@ async function postRegistrarLibro(req, res) {
     try {
         const { vchfolio, vchtitulo, vchautor, intidcategoria, intanio } = req.body;
 
-        // ASEGURAMIENTO: Campos obligatorios
         if (!vchfolio || !vchtitulo || !vchautor || !intidcategoria) {
             return res.status(400).json({ 
                 success: false, 
@@ -117,41 +116,36 @@ async function postRegistrarLibro(req, res) {
             });
         }
 
-        // ASEGURAMIENTO: Validar Año
+        const anioConvertido = Number(intanio);
+        const anioActual = new Date().getFullYear();
+
         if (intanio) {
-            const anioNum = parseInt(intanio);
-            const añoActual = new Date().getFullYear();
-            if (isNaN(anioNum) || anioNum < 1000 || anioNum > añoActual) {
+            if (isNaN(anioConvertido) || anioConvertido < 1000 || anioConvertido > anioActual) {
                 return res.status(400).json({ 
                     success: false, 
-                    error: 'El año proporcionado no es válido.' 
+                    error: `El año "${intanio}" no es válido. Debe ser un número entre 1000 y ${anioActual}.` 
                 });
             }
         }
-        const datos = req.body;
+
         let urlImagenCloudinary = null;
-
         if (req.file) {
-            // 2. ACTIVAMOS LAS LLAVES JUSTO AQUÍ
             const cloudinaryConfigurado = configurarCloudinary();
-
-            // 3. SUBIMOS USANDO LA CONFIGURACIÓN RECIÉN CARGADA
             const resultadoCloudinary = await cloudinaryConfigurado.uploader.upload(req.file.path, {
                 folder: 'biblioteca_uthh/portadas',
                 resource_type: 'image'
             });
             urlImagenCloudinary = resultadoCloudinary.secure_url;
         }
-
         const nuevoLibro = {
-            vchfolio: datos.vchfolio,
-            vchtitulo: datos.vchtitulo,
-            vchautor: datos.vchautor,
-            vcheditorial: datos.vcheditorial || null,
-            intanio: datos.intanio ? parseInt(datos.intanio) : null,
-            vchisbn: datos.vchisbn || null,
-            vchsinopsis: datos.vchsinopsis || null,
-            intidcategoria: parseInt(datos.intidcategoria),
+            vchfolio: vchfolio,
+            vchtitulo: vchtitulo,
+            vchautor: vchautor,
+            vcheditorial: req.body.vcheditorial || null,
+            intanio: intanio ? anioConvertido : null,
+            vchisbn: req.body.vchisbn || null,
+            vchsinopsis: req.body.vchsinopsis || null,
+            intidcategoria: parseInt(intidcategoria),
             vchimagen: urlImagenCloudinary
         };
 
