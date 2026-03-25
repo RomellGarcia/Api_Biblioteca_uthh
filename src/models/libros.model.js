@@ -69,20 +69,21 @@ async function obtenerCatalogo() {
     const sql = `
         SELECT l.vchfolio, l.vchtitulo, l.vchautor, l.vcheditorial, l.intanio,
                l.vchsinopsis, l.intidcategoria, l.boolactivo, l.vchimagen,
+               c.vchcategoria,
                (SELECT COUNT(*) FROM tblejemplares e 
                 WHERE e.vchfolio = l.vchfolio AND e.booldisponible = 1) as ejemplares_disponibles,
                (SELECT COUNT(*) FROM tblejemplares e 
                 WHERE e.vchfolio = l.vchfolio) as total_ejemplares
-        FROM tbllibros l ORDER BY l.vchfolio DESC
+        FROM tbllibros l
+        LEFT JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
+        ORDER BY l.vchfolio DESC
     `;
     const [resultados] = await conexion.query(sql);
-
     return resultados.map(libro => ({
         ...libro,
         imagen: libro.vchimagen || null
     }));
 }
-
 // Buscar libros por título o autor
 async function buscarLibros(q) {
     const sql = `
