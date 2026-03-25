@@ -51,22 +51,4 @@ function verificarRolAdminEmpleado(req, res, next) {
     next();
 }
 
-const verificarPropietarioOMismoRol = (req, res, next) => {
-    const { matricula } = req.params;
-    const usuarioLogueado = req.usuario; 
-
-    // Intentamos comparar contra .matricula o contra .id (que en tu caso son lo mismo)
-    const esPropietario = (usuarioLogueado.matricula == matricula || usuarioLogueado.id == matricula);
-    const esAdminEmpleado = (usuarioLogueado.idrol == 1 || usuarioLogueado.idrol == 2);
-
-    if (esAdminEmpleado || esPropietario) {
-        next();
-    } else {
-        return res.status(403).json({ 
-            success: false,
-            mensaje: "No tienes permiso para ver los préstamos de otro usuario" 
-        });
-    }
-};
-
-export { verificarAutenticacion, verificarRolAdminEmpleado, verificarPropietarioOMismoRol };
+export { verificarAutenticacion, verificarRolAdminEmpleado };
