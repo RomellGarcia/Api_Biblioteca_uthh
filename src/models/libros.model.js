@@ -189,7 +189,7 @@ const eliminarLibro = async (folio) => {
     return result;
 };
 
-export const actualizarLibroModelo = async (folio, datos) => {
+const actualizarLibroModelo = async (folio, datos) => {
     const sql = `UPDATE tbllibros SET 
                  vchtitulo = ?, vchautor = ?, vcheditorial = ?, 
                  intanio = ?, vchisbn = ?, vchsinopsis = ?, 
