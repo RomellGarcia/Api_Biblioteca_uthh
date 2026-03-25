@@ -17,7 +17,8 @@ const allowedOrigins = [
     'http://localhost:5500',
     'http://127.0.0.1:5500',
     'https://romellgarcia.github.io',
-    'https://uthhbibliotecanew.b-corpsolutions.com'
+    'https://uthhbibliotecanew.b-corpsolutions.com',
+    'https://uthhbibliotecanew.b-corpsolutions.com',
     process.env.FRONTEND_URL
 ].filter(Boolean);
 
