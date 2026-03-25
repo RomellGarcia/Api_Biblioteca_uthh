@@ -7,8 +7,10 @@ import {
     postRegistrar, 
     postSancion, 
     getBuscarPorTicket, 
-    postDevolucion 
+    postDevolucion,
+    getMisPrestamos
 } from '../controllers/prestamos.controller.js';
+
 import { 
     verificarAutenticacion, 
     verificarRolAdminEmpleado 
@@ -24,6 +26,7 @@ router.get('/buscar-ejemplares', ...auth, getBuscarEjemplares);
 router.get('/buscar-usuario', ...auth, getBuscarUsuario);
 router.get('/generar-ticket', ...auth, getGenerarTicket);
 router.get('/buscar-por-ticket', ...auth, getBuscarPorTicket);
+router.get('/misprestamos/:matricula', verificarAutenticacion, getMisPrestamos);
 
 // Rutas POST
 router.post('/registrar', ...auth, postRegistrar);

@@ -201,6 +201,23 @@ async function postDevolucion(req, res) {
     }
 }
 
+
+const getMisPrestamos = async (req, res) => {
+    const { matricula } = req.params;
+
+    if (req.usuario.matricula !== matricula || req.usuario.idrol !== 3) {
+        return res.status(403).json({ mensaje: 'Acceso no autorizado' });
+    }
+
+    try {
+        const rows = await obtenerPrestamosUsuario(matricula);
+        res.json(rows);
+    } catch (error) {
+        console.error('Error en getMisPrestamos:', error);
+        res.status(500).json({ mensaje: 'Error al obtener los préstamos' });
+    }
+};
+
 export { 
     getPrestamos, 
     getBuscarEjemplares, 
@@ -209,5 +226,6 @@ export {
     postRegistrar, 
     postSancion, 
     getBuscarPorTicket, 
-    postDevolucion 
+    postDevolucion,
+    getMisPrestamos
 };

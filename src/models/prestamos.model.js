@@ -259,6 +259,33 @@ async function registrarDevolucion(datos) {
     }
 }
 
+// Obtener préstamos de un usuario específico
+export const obtenerPrestamosUsuario = async (matricula) => {
+    const sql = `
+        SELECT 
+            p.intidprestamo, p.vchticket, p.fecha_prestamo, p.fecha_devolucion,
+            p.booldevuelto, p.vchobservaciones,
+            l.vchtitulo AS titulo_libro, l.vchautor AS autor_libro, l.vchfolio,
+            ej.vchcodigobarras, ej.vchedicion,
+            d.fechareal_devolucion, d.flmontosancion, d.boolsancion, d.vchsancion,
+            DATEDIFF(p.fecha_devolucion, CURDATE()) AS dias_restantes,
+            CASE 
+                WHEN p.booldevuelto = 1 THEN 'devuelto'
+                WHEN p.booldevuelto = 0 AND CURDATE() > p.fecha_devolucion THEN 'vencido'
+                WHEN p.booldevuelto = 0 AND DATEDIFF(p.fecha_devolucion, CURDATE()) <= 3 THEN 'proximo'
+                ELSE 'activo'
+            END AS estado
+        FROM tblprestamos p
+        LEFT JOIN tblejemplares ej ON p.intidejemplar = ej.intidejemplar
+        LEFT JOIN tbllibros     l  ON ej.vchfolio     = l.vchfolio
+        LEFT JOIN tbldevolucion d  ON p.intidprestamo = d.intidprestamo
+        WHERE p.intmatricula_usuario = ?
+        ORDER BY p.fecha_prestamo DESC
+    `;
+    const [rows] = await db.query(sql, [matricula]);
+    return rows;
+};
+
 export {
     obtenerPrestamos,
     buscarEjemplares,
@@ -267,5 +294,6 @@ export {
     registrarPrestamo,
     pagarSancion,
     buscarPorTicket,
-    registrarDevolucion
+    registrarDevolucion,
+    obtenerPrestamosUsuario
 };
