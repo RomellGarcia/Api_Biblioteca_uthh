@@ -167,6 +167,24 @@ async function postRegistrarLibro(req, res) {
     }
 }
 
+const eliminarLibroController = async (req, res) => {
+    try {
+        const { folio } = req.params;
+
+        // Aquí llamas a tu modelo (ajusta el nombre si es diferente)
+        const resultado = await eliminarLibro(folio);
+
+        if (resultado.affectedRows > 0) {
+            res.json({ success: true, message: 'Libro eliminado correctamente' });
+        } else {
+            res.status(404).json({ success: false, error: 'El libro no existe' });
+        }
+    } catch (error) {
+        console.error("Error al eliminar:", error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
 export {
     getRecomendados,
     getCategorias,
@@ -175,5 +193,6 @@ export {
     getBuscar,
     getDetalle,
     getCategoria,
-    postRegistrarLibro
+    postRegistrarLibro,
+    eliminarLibroController
 };

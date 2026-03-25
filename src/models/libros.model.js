@@ -183,6 +183,12 @@ async function registrarLibro(datos) {
     return res;
 }
 
+const eliminarLibro = async (folio) => {
+    const query = 'DELETE FROM tbllibros WHERE vchfolio = ?';
+    const [result] = await pool.query(query, [folio]);
+    return result;
+};
+
 export {
     obtenerLibrosRecomendados,
     obtenerCategorias,
@@ -191,5 +197,6 @@ export {
     buscarLibros,
     obtenerDetalle,
     obtenerPorCategoria,
-    registrarLibro
+    registrarLibro,
+    eliminarLibro
 };

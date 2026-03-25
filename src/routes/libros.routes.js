@@ -8,7 +8,8 @@ import {
     getBuscar, 
     getDetalle, 
     getCategoria,
-    postRegistrarLibro
+    postRegistrarLibro,
+    eliminarLibro
 } from '../controllers/libros.controller.js';
 
 const router = express.Router();
@@ -22,5 +23,6 @@ router.get('/buscar', getBuscar);
 router.get('/categoria/:id', getCategoria);
 router.get('/', getCatalogo);
 router.post('/registrar', upload.single('imagen'), postRegistrarLibro);
+router.delete('/eliminar/:folio', eliminarLibroController);
 
 export default router;
