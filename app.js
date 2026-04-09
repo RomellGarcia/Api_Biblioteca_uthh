@@ -6,6 +6,7 @@ import librosRoutes from './src/routes/libros.routes.js';
 import prestamosRoutes from './src/routes/prestamos.routes.js';
 import { iniciarScheduler } from './src/services/notificaciones.service.js';
 import ejemplaresRoutes from './src/routes/ejemplares.routes.js';
+import reportesRoutes from './src/routes/reportes.routes.js';
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/prestamos', prestamosRoutes);
 app.use('/api/ejemplares', ejemplaresRoutes);
+app.use('/api/reportes', reportesRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Servidor funcionando correctamente en la nube' });
