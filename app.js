@@ -42,15 +42,17 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+
+// Body parsers para el resto de rutas
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // Rutas que usan Multer (multipart/form-data) van ANTES de los body parsers
 app.use('/api/libros', librosRoutes);
 
 //La ruta del webhook de Stripe, Stripe envia el body como raw para verificar la firma
 app.use('/api/pagos', pagosRoutes);
 
-// Body parsers para el resto de rutas
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 // Rutas que NO usan Multer
 app.use('/api/auth', authRoutes);
