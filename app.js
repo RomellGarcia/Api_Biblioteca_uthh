@@ -7,6 +7,7 @@ import prestamosRoutes from './src/routes/prestamos.routes.js';
 import { iniciarScheduler } from './src/services/notificaciones.service.js';
 import ejemplaresRoutes from './src/routes/ejemplares.routes.js';
 import reportesRoutes from './src/routes/reportes.routes.js';
+import pagosRoutes from './src/routes/pagos.routes.js';
 
 dotenv.config();
 
@@ -43,6 +44,9 @@ app.use(cors({
 
 // Rutas que usan Multer (multipart/form-data) van ANTES de los body parsers
 app.use('/api/libros', librosRoutes);
+
+//La ruta del webhook de Stripe, Stripe envia el body como raw para verificar la firma
+app.use('/api/pagos', pagosRoutes);
 
 // Body parsers para el resto de rutas
 app.use(express.json());
