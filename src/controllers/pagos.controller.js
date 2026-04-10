@@ -1,20 +1,33 @@
-import Stripe from 'stripe';
+import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
+import crypto from 'crypto';
 import {
     obtenerSancionPorTicket,
     registrarPagoPendiente,
+    buscarPagoPorExternalRef,
     completarPago,
     marcarPagoFallido,
-    obtenerHistorialPagos
+    marcarPagoCancelado,
+    obtenerHistorialPagos,
+    obtenerPagoPorExternalRef
 } from '../models/pagos.model.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+// Inicializar cliente de Mercado Pago
+const client = new MercadoPagoConfig({
+    accessToken: process.env.MP_ACCESS_TOKEN,
+    options: { timeout: 10000 }
+});
 
-// POST /api/pagos/crear-sesion
+const preferenceClient = new Preference(client);
+const paymentClient = new Payment(client);
+
+// ============================================================
+// POST /api/pagos/crear-preferencia
 // Body: { vchticket: "TK001" }
-async function postCrearSesion(req, res) {
+// ============================================================
+async function postCrearPreferencia(req, res) {
     try {
         const { vchticket } = req.body;
-        const matricula = req.usuario.matricula; // viene del middleware de auth
+        const matricula = req.usuario.matricula;
 
         if (!vchticket) {
             return res.status(400).json({
@@ -33,125 +46,243 @@ async function postCrearSesion(req, res) {
             });
         }
 
-        // URLs de retorno (configuradas en .env)
         const FRONTEND_URL = process.env.FRONTEND_URL || 'https://uthhbibliotecanew.b-corpsolutions.com';
+        const BACKEND_URL = process.env.BACKEND_URL || 'https://api-biblioteca-uthh.vercel.app';
 
-        // Crear sesion de Stripe Checkout
-        const session = await stripe.checkout.sessions.create({
-            payment_method_types: ['card'],
-            mode: 'payment',
-            line_items: [{
-                price_data: {
-                    currency: 'mxn',
-                    product_data: {
-                        name: `Sancion - Ticket ${vchticket}`,
-                        description: `Pago de sancion por libro: ${sancion.titulo_libro}`
-                    },
-                    unit_amount: Math.round(sancion.flmontosancion * 100), // Stripe usa centavos
-                },
+        // Generar referencia externa unica para este pago
+        // Formato: UTHH-{ticket}-{timestamp}-{random}
+        const externalRef = `UTHH-${vchticket}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
+        // Crear preferencia de pago en Mercado Pago
+        const preferenceData = {
+            items: [{
+                id: vchticket,
+                title: `Sancion - Ticket ${vchticket}`,
+                description: `Pago de sancion por el libro: ${sancion.titulo_libro}`,
                 quantity: 1,
+                currency_id: 'MXN',
+                unit_price: parseFloat(sancion.flmontosancion)
             }],
-            success_url: `${FRONTEND_URL}/HTML/pago_exitoso.html?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${FRONTEND_URL}/HTML/mis_prestamos.html?pago=cancelado`,
+            payer: {
+                email: req.usuario.correo || 'usuario@uthh.edu.mx'
+            },
+            back_urls: {
+                success: `${FRONTEND_URL}/HTML/pago_exitoso.html?ref=${externalRef}`,
+                failure: `${FRONTEND_URL}/HTML/mis_prestamos.html?pago=fallido&ref=${externalRef}`,
+                pending: `${FRONTEND_URL}/HTML/pago_exitoso.html?ref=${externalRef}&estado=pendiente`
+            },
+            auto_return: 'approved',
+            external_reference: externalRef,
+            notification_url: `${BACKEND_URL}/api/pagos/webhook`,
+            statement_descriptor: 'BIBLIOTECA UTHH',
             metadata: {
                 vchticket: vchticket,
                 matricula: String(matricula)
-            },
-            customer_email: req.usuario.correo || undefined
-        });
+            }
+        };
+
+        const preference = await preferenceClient.create({ body: preferenceData });
 
         // Guardar el pago como pendiente en la base de datos
         await registrarPagoPendiente({
             vchticket: vchticket,
             matricula: matricula,
             monto: sancion.flmontosancion,
-            sessionId: session.id
+            preferenceId: preference.id,
+            externalRef: externalRef
         });
+
+        // Devolver URL de inicio de pago
+        // init_point: URL de produccion
+        // sandbox_init_point: URL de pruebas (se usa con credenciales TEST)
+        const urlPago = process.env.MP_ENV === 'production'
+            ? preference.init_point
+            : preference.sandbox_init_point;
 
         res.json({
             success: true,
-            sessionId: session.id,
-            url: session.url
+            preferenceId: preference.id,
+            url: urlPago,
+            externalRef: externalRef
         });
 
     } catch (error) {
-        console.error('Error al crear sesion de pago:', error);
+        console.error('Error al crear preferencia de pago:', error);
         res.status(500).json({
             success: false,
-            message: 'Error al crear sesion de pago',
+            message: 'Error al crear preferencia de pago',
             error: error.message
         });
     }
 }
 
+// ============================================================
 // POST /api/pagos/webhook
-// Stripe llama a este endpoint automaticamente cuando hay eventos de pago
-// IMPORTANTE: Esta ruta NO debe usar express.json(), debe recibir el raw body
+// Mercado Pago llama a este endpoint cuando hay eventos de pago
+// ============================================================
 async function postWebhook(req, res) {
-    const sig = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-    let event;
-    try {
-        event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err) {
-        console.error('Error de verificacion del webhook:', err.message);
-        return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
+    // Responder rapido a Mercado Pago para evitar timeouts y reintentos
+    res.status(200).send('OK');
 
     try {
-        switch (event.type) {
-            case 'checkout.session.completed': {
-                const session = event.data.object;
-                console.log('Pago completado:', session.id);
+        // Mercado Pago envia dos tipos de query params: id y topic (o type)
+        const query = req.query;
+        const body = req.body;
 
-                const resultado = await completarPago(
-                    session.id,
-                    session.payment_intent
-                );
+        // Obtener el tipo de notificacion y el id del recurso
+        const tipo = query.type || query.topic || body.type;
+        const dataId = query['data.id'] || query.id || body?.data?.id;
 
+        console.log('Webhook recibido:', { tipo, dataId, query });
+
+        // Solo procesamos notificaciones de tipo 'payment'
+        if (tipo !== 'payment' || !dataId) {
+            console.log('Webhook ignorado: no es notificacion de pago');
+            return;
+        }
+
+        // Validar la firma (si esta configurada)
+        if (process.env.MP_WEBHOOK_SECRET) {
+            const esValido = validarFirma(req, dataId);
+            if (!esValido) {
+                console.error('Firma invalida en webhook');
+                return;
+            }
+        }
+
+        // Consultar el pago a la API de Mercado Pago para obtener sus detalles
+        const pago = await paymentClient.get({ id: dataId });
+
+        if (!pago) {
+            console.error('Pago no encontrado en Mercado Pago:', dataId);
+            return;
+        }
+
+        const externalRef = pago.external_reference;
+        const estado = pago.status; // 'approved', 'rejected', 'cancelled', 'pending', etc.
+
+        console.log(`Pago ${dataId} con estado ${estado}, ref: ${externalRef}`);
+
+        if (!externalRef) {
+            console.error('Pago sin external_reference');
+            return;
+        }
+
+        // Verificar que tengamos este pago en nuestra base de datos
+        const pagoLocal = await buscarPagoPorExternalRef(externalRef);
+        if (!pagoLocal) {
+            console.error('Pago no encontrado en BD local:', externalRef);
+            return;
+        }
+
+        // Procesar segun el estado
+        switch (estado) {
+            case 'approved':
+                const resultado = await completarPago(externalRef, String(dataId));
                 if (resultado.success) {
                     console.log(`Sancion del ticket ${resultado.ticket} liquidada`);
                 }
                 break;
-            }
 
-            case 'checkout.session.expired':
-            case 'checkout.session.async_payment_failed': {
-                const session = event.data.object;
-                console.log('Pago fallido o expirado:', session.id);
-                await marcarPagoFallido(session.id);
+            case 'rejected':
+                await marcarPagoFallido(externalRef, 'Pago rechazado');
+                console.log(`Pago ${externalRef} marcado como fallido`);
                 break;
-            }
+
+            case 'cancelled':
+                await marcarPagoCancelado(externalRef);
+                console.log(`Pago ${externalRef} marcado como cancelado`);
+                break;
+
+            case 'pending':
+            case 'in_process':
+                // Pago pendiente (tipico de OXXO o SPEI), no hacemos nada
+                console.log(`Pago ${externalRef} pendiente de confirmacion`);
+                break;
 
             default:
-                console.log(`Evento no manejado: ${event.type}`);
+                console.log(`Estado no manejado: ${estado}`);
         }
-
-        res.json({ received: true });
 
     } catch (error) {
         console.error('Error procesando webhook:', error);
-        res.status(500).json({ error: error.message });
+        // Ya enviamos 200 OK, no hay que enviar otra respuesta
     }
 }
 
-// GET /api/pagos/verificar-sesion/:sessionId
-// Verifica el estado de un pago despues de que el usuario regresa del checkout
-async function getVerificarSesion(req, res) {
+// Validar la firma del webhook segun documentacion oficial de MP
+function validarFirma(req, dataId) {
     try {
-        const { sessionId } = req.params;
-        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        const xSignature = req.headers['x-signature'];
+        const xRequestId = req.headers['x-request-id'];
+        const secret = process.env.MP_WEBHOOK_SECRET;
+
+        if (!xSignature || !xRequestId || !secret) return false;
+
+        // Extraer ts y v1 del header x-signature
+        // Formato: "ts=1742505638683,v1=ced36ab6d..."
+        const parts = xSignature.split(',');
+        let ts, hash;
+
+        parts.forEach(part => {
+            const [key, value] = part.split('=');
+            if (key && value) {
+                const trimmedKey = key.trim();
+                const trimmedValue = value.trim();
+                if (trimmedKey === 'ts') ts = trimmedValue;
+                if (trimmedKey === 'v1') hash = trimmedValue;
+            }
+        });
+
+        if (!ts || !hash) return false;
+
+        // Reconstruir el manifest segun documentacion oficial
+        // Formato: id:{data.id};request-id:{x-request-id};ts:{ts};
+        const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+        // Generar HMAC SHA256
+        const cyphedSignature = crypto
+            .createHmac('sha256', secret)
+            .update(manifest)
+            .digest('hex');
+
+        return cyphedSignature === hash;
+    } catch (error) {
+        console.error('Error validando firma:', error);
+        return false;
+    }
+}
+
+// ============================================================
+// GET /api/pagos/verificar/:externalRef
+// Verifica el estado de un pago despues de que el usuario regresa del checkout
+// ============================================================
+async function getVerificar(req, res) {
+    try {
+        const { externalRef } = req.params;
+        const matricula = req.usuario.matricula;
+
+        const pago = await obtenerPagoPorExternalRef(externalRef, matricula);
+
+        if (!pago) {
+            return res.status(404).json({
+                success: false,
+                message: 'Pago no encontrado'
+            });
+        }
 
         res.json({
             success: true,
-            estado: session.payment_status, // 'paid', 'unpaid', 'no_payment_required'
-            monto: session.amount_total / 100,
-            ticket: session.metadata?.vchticket
+            estado: pago.vchestado,
+            monto: parseFloat(pago.flmonto),
+            ticket: pago.vchticket,
+            libro: pago.titulo_libro,
+            paymentId: pago.vchpaymentid,
+            fechaPago: pago.dtfechapago
         });
 
     } catch (error) {
-        console.error('Error verificando sesion:', error);
+        console.error('Error verificando pago:', error);
         res.status(500).json({
             success: false,
             message: 'Error al verificar el pago'
@@ -159,8 +290,10 @@ async function getVerificarSesion(req, res) {
     }
 }
 
+// ============================================================
 // GET /api/pagos/historial
 // Devuelve el historial de pagos del usuario autenticado
+// ============================================================
 async function getHistorial(req, res) {
     try {
         const matricula = req.usuario.matricula;
@@ -181,8 +314,8 @@ async function getHistorial(req, res) {
 }
 
 export {
-    postCrearSesion,
+    postCrearPreferencia,
     postWebhook,
-    getVerificarSesion,
+    getVerificar,
     getHistorial
 };

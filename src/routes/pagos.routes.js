@@ -1,21 +1,21 @@
 import express from 'express';
 import {
-    postCrearSesion,
+    postCrearPreferencia,
     postWebhook,
-    getVerificarSesion,
+    getVerificar,
     getHistorial
 } from '../controllers/pagos.controller.js';
 import { verificarAutenticacion } from '../middlewares/auth.middleware.js';
 
 const router = express.Router();
 
-// IMPORTANTE: El webhook NO usa autenticacion porque es llamado por Stripe directamente
-// Tampoco usa express.json() - eso se configura aparte en app.js
-router.post('/webhook', express.raw({ type: 'application/json' }), postWebhook);
+// El webhook NO usa autenticacion porque lo llama Mercado Pago directamente
+// Mercado Pago envia el body como JSON normal, asi que no necesita raw body (a diferencia de Stripe)
+router.post('/webhook', postWebhook);
 
-// Las demas rutas si requieren autenticacion del usuario
-router.post('/crear-sesion', verificarAutenticacion, postCrearSesion);
-router.get('/verificar-sesion/:sessionId', verificarAutenticacion, getVerificarSesion);
+// Las demas rutas requieren autenticacion del usuario
+router.post('/crear-preferencia', verificarAutenticacion, postCrearPreferencia);
+router.get('/verificar/:externalRef', verificarAutenticacion, getVerificar);
 router.get('/historial', verificarAutenticacion, getHistorial);
 
 export default router;

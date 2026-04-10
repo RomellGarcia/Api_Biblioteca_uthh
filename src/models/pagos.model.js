@@ -24,55 +24,68 @@ async function obtenerSancionPorTicket(vchticket, matricula) {
     return rows[0] || null;
 }
 
-// Registrar un pago pendiente
+// Registrar un pago pendiente (al crear la preferencia)
 async function registrarPagoPendiente(datos) {
     const sql = `
         INSERT INTO tblpagos 
-        (vchticket, intmatricula_usuario, flmonto, vchsessionid, vchestado)
-        VALUES (?, ?, ?, ?, 'pendiente')
+        (vchticket, intmatricula_usuario, flmonto, vchpreferenceid, vchexternalref, vchestado)
+        VALUES (?, ?, ?, ?, ?, 'pendiente')
     `;
     const [result] = await db.query(sql, [
         datos.vchticket,
         datos.matricula,
         datos.monto,
-        datos.sessionId
+        datos.preferenceId,
+        datos.externalRef
     ]);
     return result.insertId;
 }
 
+// Buscar un pago por referencia externa
+async function buscarPagoPorExternalRef(externalRef) {
+    const sql = `
+        SELECT * FROM tblpagos 
+        WHERE vchexternalref = ?
+        LIMIT 1
+    `;
+    const [rows] = await db.query(sql, [externalRef]);
+    return rows[0] || null;
+}
+
 // Marcar pago como completado y liquidar la sancion
-async function completarPago(sessionId, paymentIntent) {
+async function completarPago(externalRef, paymentId) {
     const conn = await db.getConnection();
     try {
         await conn.beginTransaction();
+
+        // Verificar que no este ya procesado (idempotencia)
+        const [existente] = await conn.query(
+            'SELECT vchestado, vchticket FROM tblpagos WHERE vchexternalref = ?',
+            [externalRef]
+        );
+
+        if (existente.length === 0) {
+            await conn.rollback();
+            return { success: false, message: 'Pago no encontrado' };
+        }
+
+        if (existente[0].vchestado === 'completado') {
+            await conn.rollback();
+            return { success: true, message: 'Pago ya estaba procesado', ticket: existente[0].vchticket };
+        }
 
         // Actualizar registro de pago
         const sqlPago = `
             UPDATE tblpagos 
             SET vchestado = 'completado',
-                vchpaymentintent = ?,
+                vchpaymentid = ?,
                 dtfechapago = NOW()
-            WHERE vchsessionid = ?
+            WHERE vchexternalref = ?
             AND vchestado = 'pendiente'
         `;
-        const [resPago] = await conn.query(sqlPago, [paymentIntent, sessionId]);
+        await conn.query(sqlPago, [paymentId, externalRef]);
 
-        if (resPago.affectedRows === 0) {
-            await conn.rollback();
-            return { success: false, message: 'Pago no encontrado o ya procesado' };
-        }
-
-        // Obtener el ticket asociado al pago
-        const [pagoRows] = await conn.query(
-            'SELECT vchticket FROM tblpagos WHERE vchsessionid = ?',
-            [sessionId]
-        );
-        const ticket = pagoRows[0]?.vchticket;
-
-        if (!ticket) {
-            await conn.rollback();
-            return { success: false, message: 'Ticket no encontrado' };
-        }
+        const ticket = existente[0].vchticket;
 
         // Marcar la sancion como pagada en tbldevolucion
         const sqlSancion = `
@@ -95,13 +108,25 @@ async function completarPago(sessionId, paymentIntent) {
 }
 
 // Marcar pago como fallido
-async function marcarPagoFallido(sessionId) {
+async function marcarPagoFallido(externalRef, motivo) {
     const sql = `
         UPDATE tblpagos 
         SET vchestado = 'fallido'
-        WHERE vchsessionid = ?
+        WHERE vchexternalref = ?
+        AND vchestado = 'pendiente'
     `;
-    await db.query(sql, [sessionId]);
+    await db.query(sql, [externalRef]);
+}
+
+// Marcar pago como cancelado
+async function marcarPagoCancelado(externalRef) {
+    const sql = `
+        UPDATE tblpagos 
+        SET vchestado = 'cancelado'
+        WHERE vchexternalref = ?
+        AND vchestado = 'pendiente'
+    `;
+    await db.query(sql, [externalRef]);
 }
 
 // Obtener historial de pagos de un usuario
@@ -112,6 +137,7 @@ async function obtenerHistorialPagos(matricula) {
             p.vchticket,
             p.flmonto,
             p.vchestado,
+            p.vchpaymentid,
             p.dtfecharegistro,
             p.dtfechapago,
             l.vchtitulo AS titulo_libro
@@ -126,10 +152,36 @@ async function obtenerHistorialPagos(matricula) {
     return rows;
 }
 
+// Obtener un pago por su external reference (para pagina de exito)
+async function obtenerPagoPorExternalRef(externalRef, matricula) {
+    const sql = `
+        SELECT 
+            p.intidpago,
+            p.vchticket,
+            p.flmonto,
+            p.vchestado,
+            p.vchpaymentid,
+            p.dtfechapago,
+            l.vchtitulo AS titulo_libro
+        FROM tblpagos p
+        INNER JOIN tblprestamos pr ON p.vchticket = pr.vchticket
+        INNER JOIN tblejemplares e ON pr.intidejemplar = e.intidejemplar
+        INNER JOIN tbllibros l ON e.vchfolio = l.vchfolio
+        WHERE p.vchexternalref = ?
+        AND p.intmatricula_usuario = ?
+        LIMIT 1
+    `;
+    const [rows] = await db.query(sql, [externalRef, matricula]);
+    return rows[0] || null;
+}
+
 export {
     obtenerSancionPorTicket,
     registrarPagoPendiente,
+    buscarPagoPorExternalRef,
     completarPago,
     marcarPagoFallido,
-    obtenerHistorialPagos
+    marcarPagoCancelado,
+    obtenerHistorialPagos,
+    obtenerPagoPorExternalRef
 };

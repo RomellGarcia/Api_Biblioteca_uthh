@@ -50,15 +50,12 @@ app.use(express.urlencoded({ extended: true }));
 // Rutas que usan Multer (multipart/form-data) van ANTES de los body parsers
 app.use('/api/libros', librosRoutes);
 
-//La ruta del webhook de Stripe, Stripe envia el body como raw para verificar la firma
-app.use('/api/pagos', pagosRoutes);
-
-
 // Rutas que NO usan Multer
 app.use('/api/auth', authRoutes);
 app.use('/api/prestamos', prestamosRoutes);
 app.use('/api/ejemplares', ejemplaresRoutes);
 app.use('/api/reportes', reportesRoutes);
+app.use('/api/pagos', pagosRoutes);
 
 app.get('/api/health', (req, res) => {
     res.json({ success: true, message: 'Servidor funcionando correctamente en la nube' });
