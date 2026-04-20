@@ -8,75 +8,88 @@ import {
 // GET /api/reportes/prestamos-por-mes
 async function getPrestamosPorMes(req, res) {
     try {
-        const mesesSolicitados = parseInt(req.query.meses) || 6;
+        const meses = parseInt(req.query.meses) || 6;
+
+        // Obtener meses disponibles en el rango
+        const mesesDisponibles = await obtenerMesesDisponibles(meses);
 
         // Obtener datos crudos
-        const datosLibros = await obtenerPrestamosPorLibro(mesesSolicitados);
-        const datosCategorias = await obtenerPrestamosPorCategoria(mesesSolicitados);
+        const datosLibros = await obtenerPrestamosPorLibro(meses);
+        const datosCategorias = await obtenerPrestamosPorCategoria(meses);
 
-        // === LIBROS ===
+        // Agrupar libros: convertir filas planas a {nombre, categoria, prestamos: []}
         const librosMap = {};
-        datosLibros.forEach(fila => {
+        datosLibros.forEach(function(fila) {
             if (!librosMap[fila.vchfolio]) {
                 librosMap[fila.vchfolio] = {
                     id: fila.vchfolio,
                     nombre: fila.nombre,
                     categoria: fila.categoria || 'Sin categoría',
-                    meses: [],      // ← Agregamos meses reales por libro
-                    prestamos: []   // ← Prestamos alineados
+                    prestamosPorMes: {}
                 };
             }
-
-            librosMap[fila.vchfolio].meses.push(fila.mes);
-            librosMap[fila.vchfolio].prestamos.push(fila.total || 0);
+            librosMap[fila.vchfolio].prestamosPorMes[fila.mes] = fila.total;
         });
 
-        let libros = Object.values(librosMap);
+        // Convertir a arreglo con prestamos alineados a los meses disponibles
+        var libros = Object.values(librosMap).map(function(libro) {
+            var prestamos = mesesDisponibles.map(function(mes) {
+                return libro.prestamosPorMes[mes] || 0;
+            });
+            return {
+                id: libro.id,
+                nombre: libro.nombre,
+                categoria: libro.categoria,
+                prestamos: prestamos
+            };
+        });
 
-        // Filtrar libros que tengan al menos un préstamo
-        libros = libros.filter(l => l.prestamos.some(p => p > 0));
+        // Filtrar libros que tienen al menos 1 préstamo
+        libros = libros.filter(function(l) {
+            return l.prestamos.some(function(p) { return p > 0; });
+        });
 
         // Ordenar por total de préstamos descendente
-        libros.sort((a, b) => {
-            const totalA = a.prestamos.reduce((s, v) => s + v, 0);
-            const totalB = b.prestamos.reduce((s, v) => s + v, 0);
+        libros.sort(function(a, b) {
+            var totalA = a.prestamos.reduce(function(s, v) { return s + v; }, 0);
+            var totalB = b.prestamos.reduce(function(s, v) { return s + v; }, 0);
             return totalB - totalA;
         });
 
-        // === CATEGORÍAS ===
-        const categoriasMap = {};
-        datosCategorias.forEach(fila => {
+        // Agrupar categorías
+        var categoriasMap = {};
+        datosCategorias.forEach(function(fila) {
             if (!categoriasMap[fila.intidcategoria]) {
                 categoriasMap[fila.intidcategoria] = {
                     id: fila.intidcategoria,
                     nombre: fila.nombre,
-                    meses: [],
-                    prestamos: []
+                    prestamosPorMes: {}
                 };
             }
-            categoriasMap[fila.intidcategoria].meses.push(fila.mes);
-            categoriasMap[fila.intidcategoria].prestamos.push(fila.total || 0);
+            categoriasMap[fila.intidcategoria].prestamosPorMes[fila.mes] = fila.total;
         });
 
-        let categorias = Object.values(categoriasMap);
-        categorias = categorias.filter(c => c.prestamos.some(p => p > 0));
+        var categorias = Object.values(categoriasMap).map(function(cat) {
+            var prestamos = mesesDisponibles.map(function(mes) {
+                return cat.prestamosPorMes[mes] || 0;
+            });
+            return {
+                id: cat.id,
+                nombre: cat.nombre,
+                prestamos: prestamos
+            };
+        });
 
-        categorias.sort((a, b) => {
-            const totalA = a.prestamos.reduce((s, v) => s + v, 0);
-            const totalB = b.prestamos.reduce((s, v) => s + v, 0);
+        categorias.sort(function(a, b) {
+            var totalA = a.prestamos.reduce(function(s, v) { return s + v; }, 0);
+            var totalB = b.prestamos.reduce(function(s, v) { return s + v; }, 0);
             return totalB - totalA;
         });
-
-        // Meses globales (para gráficos generales)
-        const todosLosMeses = [...new Set([
-            ...libros.flatMap(l => l.meses),
-            ...categorias.flatMap(c => c.meses)
-        ])].sort();
 
         res.json({
             success: true,
             data: {
-                meses: todosLosMeses,        // meses globales para resumen
+                meses: mesesDisponibles,
                 libros: libros,
                 categorias: categorias
             }
