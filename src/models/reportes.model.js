@@ -77,14 +77,17 @@ async function obtenerEstadisticasGenerales() {
 
 // Obtener lista de meses disponibles para el rango solicitado
 async function obtenerMesesDisponibles(meses = 6) {
-    const sql = `
-        SELECT DISTINCT DATE_FORMAT(p.dtfecharegistro, '%Y-%m') AS mes
-        FROM tblprestamos p
-        WHERE p.dtfecharegistro >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
-        ORDER BY mes ASC
-    `;
-    const [rows] = await db.query(sql, [meses]);
-    return rows.map(r => r.mes);
+    var resultado = [];
+    var ahora = new Date();
+    // Generar los últimos N meses en orden ascendente
+    for (var i = meses - 1; i >= 0; i--) {
+        var d = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
+        var anio = d.getFullYear();
+        var mes = d.getMonth() + 1;
+        var mesStr = anio + '-' + (mes < 10 ? '0' + mes : '' + mes);
+        resultado.push(mesStr);
+    }
+    return resultado;
 }
 
 export {
