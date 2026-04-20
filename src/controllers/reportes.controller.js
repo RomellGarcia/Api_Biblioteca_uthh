@@ -5,21 +5,36 @@ import {
     obtenerMesesDisponibles
 } from '../models/reportes.model.js';
 
+// Función auxiliar para calcular k basándose en el primer y último mes con actividad
+function calcularTasaK(prestamos) {
+    if (!prestamos || prestamos.length < 2) return 0;
+
+    const primerIndice = prestamos.findIndex(p => p > 0);
+    const ultimoIndice = prestamos.map(p => p > 0).lastIndexOf(true);
+
+    if (primerIndice === -1 || ultimoIndice === -1 || primerIndice === ultimoIndice) {
+        return 0;
+    }
+
+    const deltaT = ultimoIndice - primerIndice;
+    const xStart = prestamos[primerIndice];
+    const xEnd = prestamos[ultimoIndice];
+
+    const k = Math.log(xEnd / xStart) / deltaT;
+    return isFinite(k) ? k : 0;
+}
+
 // GET /api/reportes/prestamos-por-mes
 async function getPrestamosPorMes(req, res) {
     try {
         const meses = parseInt(req.query.meses) || 6;
-
-        // Obtener meses disponibles en el rango
         const mesesDisponibles = await obtenerMesesDisponibles(meses);
 
-        // Obtener datos crudos
         const datosLibros = await obtenerPrestamosPorLibro(meses);
         const datosCategorias = await obtenerPrestamosPorCategoria(meses);
 
-        // Agrupar libros: convertir filas planas a {nombre, categoria, prestamos: []}
         const librosMap = {};
-        datosLibros.forEach(function(fila) {
+        datosLibros.forEach(fila => {
             if (!librosMap[fila.vchfolio]) {
                 librosMap[fila.vchfolio] = {
                     id: fila.vchfolio,
@@ -31,34 +46,20 @@ async function getPrestamosPorMes(req, res) {
             librosMap[fila.vchfolio].prestamosPorMes[fila.mes] = fila.total;
         });
 
-        // Convertir a arreglo con prestamos alineados a los meses disponibles
-        var libros = Object.values(librosMap).map(function(libro) {
-            var prestamos = mesesDisponibles.map(function(mes) {
-                return libro.prestamosPorMes[mes] || 0;
-            });
+        const libros = Object.values(librosMap).map(libro => {
+            const prestamos = mesesDisponibles.map(mes => libro.prestamosPorMes[mes] || 0);
+            const k = calcularTasaK(prestamos); 
+            
             return {
-                id: libro.id,
-                nombre: libro.nombre,
-                categoria: libro.categoria,
-                prestamos: prestamos
+                ...libro,
+                prestamos: prestamos,
+                tasa_k: k,
+                porcentaje_mensual: (Math.exp(k) - 1) * 100 
             };
-        });
+        }).filter(l => l.prestamos.some(p => p > 0));
 
-        // Filtrar libros que tienen al menos 1 préstamo
-        libros = libros.filter(function(l) {
-            return l.prestamos.some(function(p) { return p > 0; });
-        });
-
-        // Ordenar por total de préstamos descendente
-        libros.sort(function(a, b) {
-            var totalA = a.prestamos.reduce(function(s, v) { return s + v; }, 0);
-            var totalB = b.prestamos.reduce(function(s, v) { return s + v; }, 0);
-            return totalB - totalA;
-        });
-
-        // Agrupar categorías
-        var categoriasMap = {};
-        datosCategorias.forEach(function(fila) {
+        const categoriasMap = {};
+        datosCategorias.forEach(fila => {
             if (!categoriasMap[fila.intidcategoria]) {
                 categoriasMap[fila.intidcategoria] = {
                     id: fila.intidcategoria,
@@ -69,22 +70,18 @@ async function getPrestamosPorMes(req, res) {
             categoriasMap[fila.intidcategoria].prestamosPorMes[fila.mes] = fila.total;
         });
 
-        var categorias = Object.values(categoriasMap).map(function(cat) {
-            var prestamos = mesesDisponibles.map(function(mes) {
-                return cat.prestamosPorMes[mes] || 0;
-            });
+        const categorias = Object.values(categoriasMap).map(cat => {
+            const prestamos = mesesDisponibles.map(mes => cat.prestamosPorMes[mes] || 0);
+            const k = calcularTasaK(prestamos);
+            
             return {
-                id: cat.id,
-                nombre: cat.nombre,
-                prestamos: prestamos
+                ...cat,
+                prestamos: prestamos,
+                tasa_k: k,
+                porcentaje_mensual: (Math.exp(k) - 1) * 100
             };
         });
-
-        categorias.sort(function(a, b) {
-            var totalA = a.prestamos.reduce(function(s, v) { return s + v; }, 0);
-            var totalB = b.prestamos.reduce(function(s, v) { return s + v; }, 0);
-            return totalB - totalA;
-        });
+        libros.sort((a, b) => b.tasa_k - a.k);
 
         res.json({
             success: true,
@@ -97,11 +94,7 @@ async function getPrestamosPorMes(req, res) {
 
     } catch (error) {
         console.error('Error en getPrestamosPorMes:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al obtener datos de reportes',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: 'Error en reportes', error: error.message });
     }
 }
 
