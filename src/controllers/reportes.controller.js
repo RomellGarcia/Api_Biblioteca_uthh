@@ -9,15 +9,9 @@ import {
 async function getPrestamosPorMes(req, res) {
     try {
         const meses = parseInt(req.query.meses) || 6;
-
-        // Obtener meses disponibles en el rango
         const mesesDisponibles = await obtenerMesesDisponibles(meses);
-
-        // Obtener datos crudos
         const datosLibros = await obtenerPrestamosPorLibro(meses);
         const datosCategorias = await obtenerPrestamosPorCategoria(meses);
-
-        // Agrupar libros: convertir filas planas a {nombre, categoria, prestamos: []}
         const librosMap = {};
         datosLibros.forEach(function(fila) {
             if (!librosMap[fila.vchfolio]) {
