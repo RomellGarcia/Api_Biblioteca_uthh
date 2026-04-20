@@ -6,43 +6,39 @@ import {
 } from '../models/reportes.model.js';
 
 // Ley de Crecimiento/Decaimiento: k promedio ponderado entre pares válidos
+// reportes.controller.js
+
 function calcularTasaK(prestamos) {
     if (!prestamos || prestamos.length < 2) return 0;
 
-    // Puntos con actividad real, guardando índice para calcular deltaT correcto
     var puntos = [];
     prestamos.forEach(function(v, i) {
         if (v > 0) puntos.push({ valor: v, idx: i });
     });
 
-    // Sin historial o un solo mes con datos — sin tendencia calculable
     if (puntos.length < 2) return 0;
 
-    var sumaPonderada = 0;
-    var sumaPesos = 0;
+    var sumaK = 0;
+    var count = 0;
 
     for (var i = 1; i < puntos.length; i++) {
         var x0 = puntos[i - 1].valor;
         var x1 = puntos[i].valor;
-        var deltaT = puntos[i].idx - puntos[i - 1].idx; // meses reales entre ambos
+        var deltaT = puntos[i].idx - puntos[i - 1].idx;
         if (deltaT <= 0) continue;
 
-        var k = Math.log(x1 / x0) / deltaT;
+        var k = Math.log(x1 / x0) / deltaT;  // k = ln(x1/x0) / Δt
         if (!isFinite(k) || Math.abs(k) >= 5) continue;
 
-        // Pares más recientes tienen más peso (2^i)
-        var peso = Math.pow(2, i);
-        sumaPonderada += k * peso;
-        sumaPesos += peso;
+        sumaK += k;   // ← suma simple, sin pesos
+        count++;
     }
 
-    if (sumaPesos === 0) return 0;
+    if (count === 0) return 0;
 
-    // Limitar k a ±1.1 para evitar proyecciones absurdas con pocos datos
-    var resultado = sumaPonderada / sumaPesos;
+    var resultado = sumaK / count;  // ← promedio simple
     return Math.max(-1.1, Math.min(1.1, resultado));
 }
-
 // GET /api/reportes/prestamos-por-mes?meses=6
 async function getPrestamosPorMes(req, res) {
     try {
