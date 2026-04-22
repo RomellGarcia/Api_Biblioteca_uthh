@@ -42,21 +42,10 @@ function calcularTasaK(prestamos) {
 // GET /api/reportes/prestamos-por-mes?meses=6
 async function getPrestamosPorMes(req, res) {
     try {
-<<<<<<< HEAD
         const meses = parseInt(req.query.meses) || 6;
         const mesesDisponibles = await obtenerMesesDisponibles(meses);
         const datosLibros = await obtenerPrestamosPorLibro(meses);
         const datosCategorias = await obtenerPrestamosPorCategoria(meses);
-=======
-        const numMeses = parseInt(req.query.meses) || 6;
-
-        // 1. Obtener meses disponibles y datos de BD
-        const mesesDisponibles = await obtenerMesesDisponibles(numMeses);
-        const datosLibros = await obtenerPrestamosPorLibro(numMeses);
-        const datosCategorias = await obtenerPrestamosPorCategoria(numMeses);
-
-        // 2. Construir mapa de libros
->>>>>>> 6b51d0c223ecf02fdfe0cefc26afeda9bc69d415
         const librosMap = {};
         datosLibros.forEach(row => {
             if (!librosMap[row.vchfolio]) {
