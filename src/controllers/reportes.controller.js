@@ -5,9 +5,7 @@ import {
     obtenerMesesDisponibles
 } from '../models/reportes.model.js';
 
-// Ley de Crecimiento/Decaimiento: k promedio ponderado entre pares válidos
-// reportes.controller.js
-
+// Ley de Crecimiento/Decaimiento
 function calcularTasaK(prestamos) {
     if (!prestamos || prestamos.length < 2) return 0;
 
@@ -30,15 +28,16 @@ function calcularTasaK(prestamos) {
         var k = Math.log(x1 / x0) / deltaT;  // k = ln(x1/x0) / Δt
         if (!isFinite(k) || Math.abs(k) >= 5) continue;
 
-        sumaK += k;   // ← suma simple, sin pesos
+        sumaK += k; 
         count++;
     }
 
     if (count === 0) return 0;
 
-    var resultado = sumaK / count;  // ← promedio simple
+    var resultado = sumaK / count; 
     return Math.max(-1.1, Math.min(1.1, resultado));
 }
+
 // GET /api/reportes/prestamos-por-mes?meses=6
 async function getPrestamosPorMes(req, res) {
     try {
@@ -58,7 +57,7 @@ async function getPrestamosPorMes(req, res) {
             librosMap[row.vchfolio].prestamosPorMes[row.mes] = row.total;
         });
 
-        // 3. Convertir a arreglo con prestamos[] alineado a mesesDisponibles
+        //Convertir a arreglo con prestamos[] alineado a mesesDisponibles
         const libros = Object.values(librosMap)
             .map(libro => {
                 const prestamos = mesesDisponibles.map(mes => libro.prestamosPorMes[mes] || 0);
@@ -71,11 +70,11 @@ async function getPrestamosPorMes(req, res) {
                     prestamos: prestamos,
                     tasa_k: k,
                     porcentaje_mensual: parseFloat(((Math.exp(k) - 1) * 100).toFixed(1)),
-                    datos_suficientes: puntosConDatos >= 2  // flag para el frontend
+                    datos_suficientes: puntosConDatos >= 2 
                 };
             })
             .filter(l => l.prestamos.some(p => p > 0))
-            .sort((a, b) => b.tasa_k - a.tasa_k);  // typo corregido
+            .sort((a, b) => b.tasa_k - a.tasa_k); 
 
         // 4. Construir mapa de categorías
         const categoriasMap = {};
