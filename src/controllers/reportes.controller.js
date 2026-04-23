@@ -6,63 +6,53 @@ import {
 } from '../models/reportes.model.js';
 
 // ====================== LEY DE CRECIMIENTO: dx/dt = kx ======================
-// Solución: x(t) = C·e^(kt)
+// Solución: x(t) = C · e^(k·(t - t0))
 //
-// REGLAS FIJAS (Método A):
-//   t = índice absoluto del mes en el arreglo (0=Nov, 1=Dic, ..., 5=Abr)
-//   tFinal = SIEMPRE prestamos.length - 1 = 5 para 6 meses
-//   C = primer valor > 0 en el arreglo
-//   t0 = índice donde está C
-//   k = ln(xFinal / C) / (tFinal - t0)
+// Método A:
+//   t0     = índice del primer mes con datos (donde está C)
+//   C      = x(t0) = primer valor > 0
+//   tFinal = prestamos.length - 1  (siempre 5 para 6 meses)
+//   k      = ln(xFinal / C) / (tFinal - t0)
 //
-// IMPORTANTE: tFinal nunca cambia (siempre el último índice del rango).
-// El deltaT se calcula desde t0 hasta tFinal, no desde 0 hasta tInicio.
+// Proyección: x(t) = C · e^(k · (t - t0))
+//   - Para el mes siguiente al último histórico: t = tFinal + 1
+//   - Para N meses a futuro: t = tFinal + N
 
 function calcularTasaK(prestamos) {
     if (!prestamos || prestamos.length < 2) return 0;
 
-    const tFinal = prestamos.length - 1;  // siempre 5 para 6 meses
-    const xFinal = prestamos[tFinal];
+    const tFinal = prestamos.length - 1;
 
-    // Buscar C: primer valor > 0 en el arreglo
+    // t0 = índice del primer mes con datos
     const t0 = prestamos.findIndex(v => v > 0);
-    if (t0 === -1) return 0;          // sin ningún dato
+    if (t0 === -1) return 0;           // sin ningún dato
+    if (t0 === tFinal) return 0;       // solo un mes con datos, sin tendencia
+
     const C = prestamos[t0];
 
-    // Si el único mes con datos es el último, no hay tendencia calculable
-    if (t0 === tFinal) return 0;
-
-    // xFinal puede ser 0 (último mes sin datos): buscar último valor > 0
-    let xEfectivo = xFinal;
+    // xFinal = valor en tFinal; si es 0 usar el último valor > 0
+    let xFinal = prestamos[tFinal];
     let tEfectivo = tFinal;
     if (xFinal === 0) {
         for (let i = tFinal - 1; i > t0; i--) {
-            if (prestamos[i] > 0) {
-                xEfectivo = prestamos[i];
-                tEfectivo = i;
-                break;
-            }
+            if (prestamos[i] > 0) { xFinal = prestamos[i]; tEfectivo = i; break; }
         }
-        if (xEfectivo === 0) return 0;  // solo un mes con datos
+        if (xFinal === 0) return 0;
     }
 
-    // k = ln(xEfectivo / C) / (tEfectivo - t0)
-    // deltaT usa los índices reales para respetar los meses vacíos
     const deltaT = tEfectivo - t0;
     if (deltaT <= 0) return 0;
 
-    const k = Math.log(xEfectivo / C) / deltaT;
+    const k = Math.log(xFinal / C) / deltaT;
     return isFinite(k) ? k : 0;
 }
 
-// C = primer valor > 0 del arreglo (condición inicial real)
 function obtenerC(prestamos) {
     if (!prestamos || prestamos.length === 0) return 0;
     const idx = prestamos.findIndex(v => v > 0);
     return idx !== -1 ? prestamos[idx] : 0;
 }
 
-// t0 = índice donde está C
 function obtenerT0(prestamos) {
     if (!prestamos || prestamos.length === 0) return 0;
     const idx = prestamos.findIndex(v => v > 0);
@@ -93,11 +83,10 @@ async function getPrestamosPorMes(req, res) {
 
         const libros = Object.values(librosMap)
             .map(libro => {
-                // arreglo de 6 posiciones alineado a mesesDisponibles, 0 donde no hubo
                 const prestamos = mesesDisponibles.map(mes => libro.prestamosPorMes[mes] || 0);
-                const k   = calcularTasaK(prestamos);
-                const C   = obtenerC(prestamos);
-                const t0  = obtenerT0(prestamos);
+                const k  = calcularTasaK(prestamos);
+                const C  = obtenerC(prestamos);
+                const t0 = obtenerT0(prestamos);
                 const puntosConDatos = prestamos.filter(v => v > 0).length;
 
                 return {
@@ -153,11 +142,7 @@ async function getPrestamosPorMes(req, res) {
 
     } catch (error) {
         console.error('Error en getPrestamosPorMes:', error);
-        res.status(500).json({
-            success:  false,
-            message:  'Error en reportes',
-            error:    error.message
-        });
+        res.status(500).json({ success: false, message: 'Error en reportes', error: error.message });
     }
 }
 
@@ -168,11 +153,7 @@ async function getEstadisticas(req, res) {
         res.json({ success: true, data: stats });
     } catch (error) {
         console.error('Error en getEstadisticas:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al obtener estadísticas',
-            error:   error.message
-        });
+        res.status(500).json({ success: false, message: 'Error al obtener estadísticas', error: error.message });
     }
 }
 
