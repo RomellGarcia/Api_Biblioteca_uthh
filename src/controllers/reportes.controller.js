@@ -5,7 +5,7 @@ import {
     obtenerMesesDisponibles
 } from '../models/reportes.model.js';
 
-//LEY DE CRECIMIENTO: dx/dt = kx
+// ====================== LEY DE CRECIMIENTO: dx/dt = kx ======================
 // Solución: x(t) = C·e^(kt)
 // Donde:
 //   C  = x(t=0) = valor en el PRIMER mes del rango (condición inicial)
@@ -50,6 +50,8 @@ function calcularTasaK(prestamos) {
         const k = Math.log(xUlt / C) / ultimoIdx;
         return isFinite(k) ? k : 0;
     }
+
+    // Ambos 0: sin datos suficientes
     return 0;
 }
 
@@ -69,7 +71,7 @@ function obtenerT0(prestamos) {
     return prestamos.findIndex(v => v > 0);
 }
 
-// GET /api/reportes/prestamos-por-mes?meses=6
+// ====================== GET /api/reportes/prestamos-por-mes?meses=6 ======================
 async function getPrestamosPorMes(req, res) {
     try {
         const numMeses = parseInt(req.query.meses) || 6;
@@ -78,6 +80,7 @@ async function getPrestamosPorMes(req, res) {
         const datosLibros = await obtenerPrestamosPorLibro(numMeses);
         const datosCategorias = await obtenerPrestamosPorCategoria(numMeses);
 
+        // ── Libros ──
         const librosMap = {};
         datosLibros.forEach(row => {
             if (!librosMap[row.vchfolio]) {
@@ -164,7 +167,7 @@ async function getPrestamosPorMes(req, res) {
     }
 }
 
-//GET /api/reportes/estadisticas
+// ====================== GET /api/reportes/estadisticas ======================
 async function getEstadisticas(req, res) {
     try {
         const stats = await obtenerEstadisticasGenerales();
