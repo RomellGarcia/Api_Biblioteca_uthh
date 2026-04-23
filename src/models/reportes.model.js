@@ -2,7 +2,6 @@ import db from '../config/db.js';
 
 // Obtener préstamos agrupados por libro y por mes (últimos N meses)
 async function obtenerPrestamosPorLibro(meses = 6) {
-    // Usamos DATE_FORMAT para asegurar el match con el generador de JS (YYYY-MM)
     const sql = `
         SELECT
             l.vchfolio,
@@ -14,8 +13,8 @@ async function obtenerPrestamosPorLibro(meses = 6) {
         INNER JOIN tblejemplares e ON p.intidejemplar = e.intidejemplar
         INNER JOIN tbllibros l ON e.vchfolio = l.vchfolio
         LEFT JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
-        WHERE p.fecha_prestamo >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL ? - 1 MONTH), '%Y-%m-01')
-        GROUP BY l.vchfolio, l.vchtitulo, c.vchcategoria, mes
+        WHERE p.fecha_prestamo >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)  
+        GROUP BY l.vchfolio, l.vchtitulo, c.vchcategoria, DATE_FORMAT(p.fecha_prestamo, '%Y-%m')
         ORDER BY l.vchtitulo ASC, mes ASC
     `;
     const [rows] = await db.query(sql, [meses]);
@@ -33,21 +32,21 @@ async function obtenerPrestamosPorCategoria(meses = 6) {
         INNER JOIN tblejemplares e ON p.intidejemplar = e.intidejemplar
         INNER JOIN tbllibros l ON e.vchfolio = l.vchfolio
         INNER JOIN tblcategoria c ON l.intidcategoria = c.intidcategoria
-        WHERE p.fecha_prestamo >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL ? - 1 MONTH), '%Y-%m-01')
-        GROUP BY c.intidcategoria, c.vchcategoria, mes
+        WHERE p.fecha_prestamo >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)  
+        GROUP BY c.intidcategoria, c.vchcategoria, DATE_FORMAT(p.fecha_prestamo, '%Y-%m')
         ORDER BY c.vchcategoria ASC, mes ASC
     `;
     const [rows] = await db.query(sql, [meses]);
     return rows;
 }
 
-// Obtener estadísticas generales (Se mantiene igual, funciona bien para los contadores)
+// Obtener estadísticas generales
 async function obtenerEstadisticasGenerales() {
     const sqlTotal = `
         SELECT
-            COUNT(CASE WHEN p.fecha_prestamo >= DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 END) AS total_mes_actual,
-            COUNT(CASE WHEN p.fecha_prestamo >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01')
-                AND p.fecha_prestamo < DATE_FORMAT(CURDATE(), '%Y-%m-01') THEN 1 END) AS total_mes_anterior,
+            COUNT(CASE WHEN p.fecha_prestamo >= DATE_SUB(CURDATE(), INTERVAL 1 MONTH) THEN 1 END) AS total_mes_actual,
+            COUNT(CASE WHEN p.fecha_prestamo >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)
+                AND p.fecha_prestamo < DATE_SUB(CURDATE(), INTERVAL 1 MONTH) THEN 1 END) AS total_mes_anterior,
             COUNT(p.intidprestamo) AS total_historico,
             COUNT(CASE WHEN p.booldevuelto = 0 THEN 1 END) AS prestamos_activos
         FROM tblprestamos p
@@ -75,12 +74,12 @@ async function obtenerEstadisticasGenerales() {
     };
 }
 
-// Genera el array de meses guía (YYYY-MM). Esta es la "maestra" para rellenar ceros.
+// Obtener lista de meses disponibles para el rango solicitado
 async function obtenerMesesDisponibles(meses = 6) {
     var resultado = [];
     var ahora = new Date();
+    // Generar los últimos N meses en orden ascendente
     for (var i = meses - 1; i >= 0; i--) {
-        // Obtenemos el primer día de cada mes para evitar errores de desbordamiento en meses cortos
         var d = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
         var anio = d.getFullYear();
         var mes = d.getMonth() + 1;
