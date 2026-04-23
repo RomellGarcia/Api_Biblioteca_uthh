@@ -6,180 +6,140 @@ import {
 } from '../models/reportes.model.js';
 
 // ====================== LEY DE CRECIMIENTO: dx/dt = kx ======================
-// Solución: x(t) = C·e^(kt)
-// Donde:
-//   C  = x(t=0) = valor en el PRIMER mes del rango (condición inicial)
-//   t  = número de mes (0, 1, 2, 3, 4, 5 para 6 meses)
-//   k  = ln(x_último / C) / t_último
-//   Si C = 0 → se usa el primer mes con valor > 0 como origen
-
 function calcularTasaK(prestamos) {
     if (!prestamos || prestamos.length < 2) return 0;
 
-    const tFinal = prestamos.length - 1;  // último índice = t máximo
+    const tFinal = prestamos.length - 1;
+    
+    // Buscamos el PRIMER mes que tenga préstamos (nuestra Condición Inicial real)
+    const primerIdx = prestamos.findIndex(v => v > 0);
+    
+    // Si no hay ningún préstamo o solo hay en el último mes, no hay tendencia calculable
+    if (primerIdx === -1 || primerIdx === tFinal) return 0;
 
-    // C = valor en t=0 (primer mes del rango)
-    const C = prestamos[0];
-    // x_final = valor en t=tFinal (último mes del rango)
+    const C = prestamos[primerIdx];
     const xFinal = prestamos[tFinal];
 
-    // Caso normal: C > 0 y xFinal > 0
-    if (C > 0 && xFinal > 0) {
-        const k = Math.log(xFinal / C) / tFinal;
-        return isFinite(k) ? k : 0;
-    }
-
-    // Caso C = 0: buscar primer mes con actividad como origen
-    if (C === 0 && xFinal > 0) {
-        const primerIdx = prestamos.findIndex(v => v > 0);
-        if (primerIdx === -1 || primerIdx === tFinal) return 0;
-        const C2 = prestamos[primerIdx];
-        const deltaT = tFinal - primerIdx;
-        const k = Math.log(xFinal / C2) / deltaT;
-        return isFinite(k) ? k : 0;
-    }
-
-    // Caso xFinal = 0: buscar último mes con actividad como destino
-    if (C > 0 && xFinal === 0) {
-        let ultimoIdx = -1;
+    // Si el último mes es 0, la tasa es negativa. 
+    // Para evitar ln(0) [Syntax Error], usamos un valor muy pequeño (0.1) o 
+    // buscamos el último valor registrado para marcar la tendencia hasta ese punto.
+    if (xFinal === 0) {
+        let ultimoConValorIdx = -1;
         for (let i = tFinal - 1; i >= 0; i--) {
             if (prestamos[i] > 0) { ultimoIdx = i; break; }
         }
-        if (ultimoIdx <= 0) return 0;
-        const xUlt = prestamos[ultimoIdx];
-        const k = Math.log(xUlt / C) / ultimoIdx;
-        return isFinite(k) ? k : 0;
+        if (ultimoIdx <= primerIdx) return 0; // Solo hubo un pico de actividad
+        
+        // Calculamos k hasta el último momento que hubo actividad
+        const kDescenso = Math.log(0.5 / C) / tFinal; // Simulamos tendencia a agotarse
+        return isFinite(kDescenso) ? kDescenso : 0;
     }
 
-    // Ambos 0: sin datos suficientes
-    return 0;
+    // Caso estándar: k = ln(xf / C) / deltaT
+    const deltaT = tFinal - primerIdx;
+    const k = Math.log(xFinal / C) / deltaT;
+
+    return isFinite(k) ? k : 0;
 }
 
-// Obtener C (condición inicial) para enviarlo al frontend
 function obtenerC(prestamos) {
-    if (!prestamos || prestamos.length === 0) return 0;
-    if (prestamos[0] > 0) return prestamos[0];
-    // Si C=0, el C efectivo es el primer valor > 0
-    const primerIdx = prestamos.findIndex(v => v > 0);
-    return primerIdx !== -1 ? prestamos[primerIdx] : 0;
+    if (!prestamos) return 0;
+    const primerVal = prestamos.find(v => v > 0);
+    return primerVal || 0;
 }
 
-// t en que está C (si prestamos[0] > 0 es t=0, si no es el índice del primer >0)
 function obtenerT0(prestamos) {
-    if (!prestamos || prestamos.length === 0) return 0;
-    if (prestamos[0] > 0) return 0;
-    return prestamos.findIndex(v => v > 0);
+    if (!prestamos) return 0;
+    const idx = prestamos.findIndex(v => v > 0);
+    return idx === -1 ? 0 : idx;
 }
 
-// ====================== GET /api/reportes/prestamos-por-mes?meses=6 ======================
-async function getPrestamosPorMes(req, res) {
+// ====================== GET /api/reportes/prestamos-por-mes ======================
+export async function getPrestamosPorMes(req, res) {
     try {
         const numMeses = parseInt(req.query.meses) || 6;
-
         const mesesDisponibles = await obtenerMesesDisponibles(numMeses);
-        const datosLibros = await obtenerPrestamosPorLibro(numMeses);
-        const datosCategorias = await obtenerPrestamosPorCategoria(numMeses);
+        
+        // Ejecutamos consultas en paralelo para ganar velocidad
+        const [datosLibros, datosCategorias] = await Promise.all([
+            obtenerPrestamosPorLibro(numMeses),
+            obtenerPrestamosPorCategoria(numMeses)
+        ]);
 
-        // ── Libros ──
+        // Procesar Libros
         const librosMap = {};
         datosLibros.forEach(row => {
             if (!librosMap[row.vchfolio]) {
                 librosMap[row.vchfolio] = {
                     nombre: row.nombre,
                     categoria: row.categoria,
-                    prestamosPorMes: {}
+                    datos: {}
                 };
             }
-            librosMap[row.vchfolio].prestamosPorMes[row.mes] = row.total;
+            librosMap[row.vchfolio].datos[row.mes] = row.total;
         });
 
-        const libros = Object.values(librosMap)
-            .map(libro => {
-                // prestamos[] alineado a los 6 meses, con 0 donde no hubo
-                const prestamos = mesesDisponibles.map(mes => libro.prestamosPorMes[mes] || 0);
-                const k = calcularTasaK(prestamos);
-                const C = obtenerC(prestamos);
-                const t0 = obtenerT0(prestamos);
-                const puntosConDatos = prestamos.filter(v => v > 0).length;
+        const libros = Object.values(librosMap).map(libro => {
+            // RELLENADO DE HUECOS: Si el mes no existe en la DB, va un 0
+            const prestamosArr = mesesDisponibles.map(m => libro.datos[m] || 0);
+            
+            const k = calcularTasaK(prestamosArr);
+            const puntosConDatos = prestamosArr.filter(v => v > 0).length;
 
-                return {
-                    nombre: libro.nombre,
-                    categoria: libro.categoria,
-                    prestamos,           // arreglo completo de 6 meses
-                    C,                   // condición inicial
-                    t0,                  // índice donde está C
-                    tasa_k: k,           // constante de crecimiento
-                    porcentaje_mensual: parseFloat(((Math.exp(k) - 1) * 100).toFixed(1)),
-                    datos_suficientes: puntosConDatos >= 2
-                };
-            })
-            .filter(l => l.prestamos.some(p => p > 0))
-            .sort((a, b) => b.tasa_k - a.tasa_k);
+            return {
+                nombre: libro.nombre,
+                categoria: libro.categoria,
+                prestamos: prestamosArr,
+                C: obtenerC(prestamosArr),
+                t0: obtenerT0(prestamosArr),
+                tasa_k: k,
+                porcentaje_mensual: parseFloat(((Math.exp(k) - 1) * 100).toFixed(1)),
+                datos_suficientes: puntosConDatos >= 2
+            };
+        }).sort((a, b) => b.tasa_k - a.tasa_k);
 
-        // ── Categorías ──
+        // Procesar Categorías (Misma lógica de rellenado)
         const categoriasMap = {};
-        datosCategorias.forEach(fila => {
-            if (!categoriasMap[fila.intidcategoria]) {
-                categoriasMap[fila.intidcategoria] = {
-                    id: fila.intidcategoria,
-                    nombre: fila.nombre,
-                    prestamosPorMes: {}
+        datosCategorias.forEach(row => {
+            if (!categoriasMap[row.intidcategoria]) {
+                categoriasMap[row.intidcategoria] = {
+                    nombre: row.nombre,
+                    datos: {}
                 };
             }
-            categoriasMap[fila.intidcategoria].prestamosPorMes[fila.mes] = fila.total;
+            categoriasMap[row.intidcategoria].datos[row.mes] = row.total;
         });
 
-        const categorias = Object.values(categoriasMap)
-            .map(cat => {
-                const prestamos = mesesDisponibles.map(mes => cat.prestamosPorMes[mes] || 0);
-                const k = calcularTasaK(prestamos);
-                const C = obtenerC(prestamos);
-                const t0 = obtenerT0(prestamos);
+        const categorias = Object.values(categoriasMap).map(cat => {
+            const prestamosArr = mesesDisponibles.map(m => cat.datos[m] || 0);
+            const k = calcularTasaK(prestamosArr);
 
-                return {
-                    id: cat.id,
-                    nombre: cat.nombre,
-                    prestamos,
-                    C,
-                    t0,
-                    tasa_k: k,
-                    porcentaje_mensual: parseFloat(((Math.exp(k) - 1) * 100).toFixed(1))
-                };
-            })
-            .sort((a, b) => b.tasa_k - a.tasa_k);
+            return {
+                nombre: cat.nombre,
+                prestamos: prestamosArr,
+                C: obtenerC(prestamosArr),
+                t0: obtenerT0(prestamosArr),
+                tasa_k: k,
+                porcentaje_mensual: parseFloat(((Math.exp(k) - 1) * 100).toFixed(1))
+            };
+        }).sort((a, b) => b.tasa_k - a.tasa_k);
 
         res.json({
             success: true,
-            data: {
-                meses: mesesDisponibles,
-                libros,
-                categorias
-            }
+            data: { meses: mesesDisponibles, libros, categorias }
         });
 
     } catch (error) {
-        console.error('Error en getPrestamosPorMes:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error en reportes',
-            error: error.message
-        });
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Error al procesar reportes' });
     }
 }
 
-// ====================== GET /api/reportes/estadisticas ======================
-async function getEstadisticas(req, res) {
+export async function getEstadisticas(req, res) {
     try {
         const stats = await obtenerEstadisticasGenerales();
         res.json({ success: true, data: stats });
     } catch (error) {
-        console.error('Error en getEstadisticas:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al obtener estadísticas',
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 }
-
-export { getPrestamosPorMes, getEstadisticas };
