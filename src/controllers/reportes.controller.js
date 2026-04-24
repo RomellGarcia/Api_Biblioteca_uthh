@@ -6,87 +6,51 @@ import {
 } from '../models/reportes.model.js';
 
 // ====================== LEY DE CRECIMIENTO/DECRECIMIENTO ======================
-// Fórmula base: x = C · e^(k · t)
-// Origen: dx/dt = kx → dx/x = k dt → ln(x) = kt + ln(C) → x = Ce^(kt)
+// Fórmula: x(t) = C · e^(k · t)
+// Origen:  dx/dt = kx  →  dx/x = k dt  →  ln(x) = kt + ln(C)  →  x = Ce^(kt)
 //
-// MÉTODO 1 - Punto Promedio (todos los meses tienen préstamos > 0):
-//   C  = valor del primer mes (condición inicial directa)
-//   t̄  = promedio de los índices t = (n-1)/2
-//   P̄  = promedio de los préstamos
-//   k  = ln(P̄ / C) / t̄
+// Cálculo de C y k (método del punto promedio, igual para todos los libros):
+//   - Los meses con 0 préstamos se reemplazan por 0.1 antes de calcular.
+//     Esto evita que un cero absoluto jale el promedio artificialmente hacia
+//     abajo, y además ln(0) es matemáticamente indefinido.
+//   - C  = valor del primer mes (condición inicial: x(0) = C)
+//   - t̄  = promedio de los índices t = (n-1)/2  →  2.5 para 6 meses
+//   - x̄  = promedio de los préstamos ajustados
+//   - k  = ln(x̄ / C) / t̄   (despejado de x̄ = C · e^(k · t̄))
 //
-// MÉTODO 2 - Mínimos Cuadrados (algún mes tiene 0 préstamos):
-//   Los ceros se reemplazan por 0.1 (ln(0) es indefinido)
-//   Linealizar: Y = ln(x) → Y = kt + b  (b = ln(C))
-//   Sistema de ecuaciones sumando los n meses:
-//     ΣY     = k·Σt  + n·b
-//     Σ(t·Y) = k·Σt² + b·Σt
-//   k = (n·Σ(t·Y) - Σt·ΣY) / (n·Σt² - (Σt)²)
-//   b = (ΣY - k·Σt) / n  →  C = e^b
-//
-// MÍNIMO: al menos 2 meses con préstamos > 0 para calcular.
+// Mínimo requerido: al menos 2 meses con préstamos > 0 para calcular.
 
 function calcularModelo(prestamos) {
   var n = prestamos.length;
   var mesesConDatos = prestamos.filter(function(v) { return v > 0; }).length;
 
-  // Sin datos suficientes
+  // Sin datos suficientes para calcular tendencia
   if (mesesConDatos < 2) {
     var primerValor = prestamos.find(function(v) { return v > 0; }) || 1;
-    return { k: 0, C: primerValor, t0: 0, datos_suficientes: false, meses_con_datos: mesesConDatos, metodo: 'ninguno' };
-  }
-
-  // ── MÉTODO 1: Punto Promedio ─────────────────────────────────────────
-  // Aplica cuando TODOS los meses tienen préstamos (sin ceros)
-  var todosTienenDatos = prestamos.every(function(v) { return v > 0; });
-
-  if (todosTienenDatos) {
-    var C = prestamos[0];                                          // CI = primer mes
-    var tPromedio = (n - 1) / 2;                                   // t̄ = (0+1+...+n-1)/n
-    var sumaP = prestamos.reduce(function(s, v) { return s + v; }, 0);
-    var pPromedio = sumaP / n;                                     // P̄ = promedio préstamos
-    var k = Math.log(pPromedio / C) / tPromedio;                   // k = ln(P̄/C) / t̄
-    k = Math.max(-1.1, Math.min(1.1, k));
-
     return {
-      k: parseFloat(k.toFixed(6)),
-      C: parseFloat(C.toFixed(4)),
+      k: 0,
+      C: primerValor,
       t0: 0,
-      datos_suficientes: true,
-      meses_con_datos: mesesConDatos,
-      metodo: 'promedio',
-      tPromedio: parseFloat(tPromedio.toFixed(4)),
-      pPromedio: parseFloat(pPromedio.toFixed(4))
+      datos_suficientes: false,
+      meses_con_datos: mesesConDatos
     };
   }
 
-  // ── MÉTODO 2: Mínimos Cuadrados ──────────────────────────────────────
-  // Aplica cuando hay al menos un mes con 0 préstamos
-  var datos = prestamos.map(function(x, t) {
-    return { t: t, x: x === 0 ? 0.1 : x };
-  });
+  // Reemplazar 0 por 0.1 — mismo ajuste para todos los libros
+  var datos = prestamos.map(function(x) { return x === 0 ? 0.1 : x; });
 
-  var sumaT  = 0;
-  var sumaY  = 0;
-  var sumaT2 = 0;
-  var sumaTY = 0;
+  // C = primer mes ajustado (condición inicial)
+  var C = datos[0];
 
-  datos.forEach(function(p) {
-    var Y = Math.log(p.x);
-    sumaT  += p.t;
-    sumaY  += Y;
-    sumaT2 += p.t * p.t;
-    sumaTY += p.t * Y;
-  });
+  // t̄ = promedio de los índices de tiempo
+  var tPromedio = (n - 1) / 2;
 
-  var denominador = n * sumaT2 - sumaT * sumaT;
-  if (denominador === 0) {
-    return { k: 0, C: prestamos[0] || 1, t0: 0, datos_suficientes: false, meses_con_datos: mesesConDatos, metodo: 'ninguno' };
-  }
+  // x̄ = promedio de los préstamos ajustados
+  var sumaX = datos.reduce(function(s, v) { return s + v; }, 0);
+  var xPromedio = sumaX / n;
 
-  var k = (n * sumaTY - sumaT * sumaY) / denominador;
-  var b = (sumaY - k * sumaT) / n;
-  var C = Math.exp(b);
+  // k = ln(x̄ / C) / t̄
+  var k = Math.log(xPromedio / C) / tPromedio;
   k = Math.max(-1.1, Math.min(1.1, k));
 
   return {
@@ -95,7 +59,8 @@ function calcularModelo(prestamos) {
     t0: 0,
     datos_suficientes: true,
     meses_con_datos: mesesConDatos,
-    metodo: 'minimos_cuadrados'
+    tPromedio: parseFloat(tPromedio.toFixed(4)),
+    xPromedio: parseFloat(xPromedio.toFixed(4))
   };
 }
 
@@ -112,7 +77,11 @@ async function getPrestamosPorMes(req, res) {
     const librosMap = {};
     datosLibros.forEach(row => {
       if (!librosMap[row.vchfolio]) {
-        librosMap[row.vchfolio] = { nombre: row.nombre, categoria: row.categoria, prestamosPorMes: {} };
+        librosMap[row.vchfolio] = {
+          nombre: row.nombre,
+          categoria: row.categoria,
+          prestamosPorMes: {}
+        };
       }
       librosMap[row.vchfolio].prestamosPorMes[row.mes] = row.total;
     });
@@ -131,9 +100,8 @@ async function getPrestamosPorMes(req, res) {
           porcentaje_mensual: parseFloat(((Math.exp(modelo.k) - 1) * 100).toFixed(1)),
           datos_suficientes:  modelo.datos_suficientes,
           meses_con_datos:    modelo.meses_con_datos,
-          metodo:             modelo.metodo,
           tPromedio:          modelo.tPromedio || null,
-          pPromedio:          modelo.pPromedio || null
+          xPromedio:          modelo.xPromedio || null
         };
       })
       .filter(l => l.prestamos.some(p => p > 0))
@@ -143,7 +111,11 @@ async function getPrestamosPorMes(req, res) {
     const categoriasMap = {};
     datosCategorias.forEach(fila => {
       if (!categoriasMap[fila.intidcategoria]) {
-        categoriasMap[fila.intidcategoria] = { id: fila.intidcategoria, nombre: fila.nombre, prestamosPorMes: {} };
+        categoriasMap[fila.intidcategoria] = {
+          id: fila.intidcategoria,
+          nombre: fila.nombre,
+          prestamosPorMes: {}
+        };
       }
       categoriasMap[fila.intidcategoria].prestamosPorMes[fila.mes] = fila.total;
     });
@@ -162,14 +134,16 @@ async function getPrestamosPorMes(req, res) {
           porcentaje_mensual: parseFloat(((Math.exp(modelo.k) - 1) * 100).toFixed(1)),
           datos_suficientes:  modelo.datos_suficientes,
           meses_con_datos:    modelo.meses_con_datos,
-          metodo:             modelo.metodo,
           tPromedio:          modelo.tPromedio || null,
-          pPromedio:          modelo.pPromedio || null
+          xPromedio:          modelo.xPromedio || null
         };
       })
       .sort((a, b) => b.tasa_k - a.tasa_k);
 
-    res.json({ success: true, data: { meses: mesesDisponibles, libros, categorias } });
+    res.json({
+      success: true,
+      data: { meses: mesesDisponibles, libros, categorias }
+    });
 
   } catch (error) {
     console.error('Error en getPrestamosPorMes:', error);
