@@ -5,52 +5,42 @@ import {
   obtenerMesesDisponibles
 } from '../models/reportes.model.js';
 
-// Regresión lineal exponencial sobre ln(x)
-// Devuelve { k, C, t0 } para usar en x(t) = C · e^(k · (t - t0))
-function calcularModelo(prestamos) {
-  // Solo puntos con actividad real, guardando su índice t
+// Ley de Crecimiento/Decaimiento: solo ultimos dos meses con datos
+function calcularTasaK(prestamos) {
+  if (!prestamos || prestamos.length < 2) return 0;
+
   var puntos = [];
-  prestamos.forEach(function (v, i) {
-    if (v > 0) puntos.push({ t: i, lnX: Math.log(v) });
+  prestamos.forEach(function(v, i) {
+    if (v > 0) puntos.push({ valor: v, idx: i });
   });
 
-  // Sin suficientes puntos no hay modelo
+  if (puntos.length < 2) return 0;
+
+  // Solo el penultimo y el ultimo punto con datos reales
+  var p0 = puntos[puntos.length - 2];
+  var p1 = puntos[puntos.length - 1];
+
+  var deltaT = p1.idx - p0.idx;
+  if (deltaT <= 0) return 0;
+
+  var k = Math.log(p1.valor / p0.valor) / deltaT;
+
+  if (!isFinite(k) || Math.abs(k) >= 5) return 0;
+
+  return Math.max(-1.1, Math.min(1.1, k));
+}
+
+// Extrae C y t0 de los ultimos dos puntos con datos
+function calcularCyT0(prestamos) {
+  var puntos = [];
+  prestamos.forEach(function(v, i) {
+    if (v > 0) puntos.push({ valor: v, idx: i });
+  });
   if (puntos.length < 2) {
-    return { k: 0, C: prestamos.find(function (v) { return v > 0; }) || 1, t0: 0 };
+    return { C: prestamos.find(v => v > 0) || 1, t0: 0 };
   }
-
-  var n = puntos.length;
-  var sumT  = 0;
-  var sumY  = 0;
-  var sumTY = 0;
-  var sumT2 = 0;
-
-  puntos.forEach(function (p) {
-    sumT  += p.t;
-    sumY  += p.lnX;
-    sumTY += p.t * p.lnX;
-    sumT2 += p.t * p.t;
-  });
-
-  // Denominador de la fórmula de mínimos cuadrados
-  var denominador = (n * sumT2 - sumT * sumT);
-
-  // Si todos los t son iguales no hay pendiente calculable
-  if (denominador === 0) {
-    return { k: 0, C: Math.exp(sumY / n), t0: 0 };
-  }
-
-  // Pendiente k = tasa de crecimiento continua
-  var k = (n * sumTY - sumT * sumY) / denominador;
-
-  // Intercepto: ln(C) cuando t=0
-  var lnC = (sumY - k * sumT) / n;
-  var C   = Math.exp(lnC);
-
-  // Limitar k para evitar proyecciones absurdas con pocos datos
-  k = Math.max(-1.1, Math.min(1.1, k));
-
-  return { k: k, C: C, t0: 0 };
+  var p0 = puntos[puntos.length - 2];
+  return { C: p0.valor, t0: p0.idx };
 }
 
 // GET /api/reportes/prestamos-por-mes?meses=6
@@ -58,12 +48,11 @@ async function getPrestamosPorMes(req, res) {
   try {
     const numMeses = parseInt(req.query.meses) || 6;
 
-    // 1. Obtener meses disponibles y datos de BD
-    const mesesDisponibles  = await obtenerMesesDisponibles(numMeses);
-    const datosLibros       = await obtenerPrestamosPorLibro(numMeses);
-    const datosCategorias   = await obtenerPrestamosPorCategoria(numMeses);
+    const mesesDisponibles = await obtenerMesesDisponibles(numMeses);
+    const datosLibros      = await obtenerPrestamosPorLibro(numMeses);
+    const datosCategorias  = await obtenerPrestamosPorCategoria(numMeses);
 
-    // 2. Construir mapa de libros
+    // Mapa de libros
     const librosMap = {};
     datosLibros.forEach(row => {
       if (!librosMap[row.vchfolio]) {
@@ -76,37 +65,34 @@ async function getPrestamosPorMes(req, res) {
       librosMap[row.vchfolio].prestamosPorMes[row.mes] = row.total;
     });
 
-    // 3. Convertir a arreglo con prestamos[] alineado a mesesDisponibles
     const libros = Object.values(librosMap)
       .map(libro => {
         const prestamos       = mesesDisponibles.map(mes => libro.prestamosPorMes[mes] || 0);
-        const modelo          = calcularModelo(prestamos);
-        const k               = modelo.k;
-        const C               = modelo.C;
-        const t0              = modelo.t0;
+        const k               = calcularTasaK(prestamos);
+        const { C, t0 }       = calcularCyT0(prestamos);
         const puntosConDatos  = prestamos.filter(v => v > 0).length;
 
         return {
-          nombre:             libro.nombre,
-          categoria:          libro.categoria,
-          prestamos:          prestamos,
-          tasa_k:             k,
-          C:                  C,
-          t0:                 t0,
+          nombre:            libro.nombre,
+          categoria:         libro.categoria,
+          prestamos:         prestamos,
+          tasa_k:            k,
+          C:                 C,
+          t0:                t0,
           porcentaje_mensual: parseFloat(((Math.exp(k) - 1) * 100).toFixed(1)),
-          datos_suficientes:  puntosConDatos >= 2
+          datos_suficientes: puntosConDatos >= 2
         };
       })
       .filter(l => l.prestamos.some(p => p > 0))
       .sort((a, b) => b.tasa_k - a.tasa_k);
 
-    // 4. Construir mapa de categorías
+    // Mapa de categorias
     const categoriasMap = {};
     datosCategorias.forEach(fila => {
       if (!categoriasMap[fila.intidcategoria]) {
         categoriasMap[fila.intidcategoria] = {
-          id:              fila.intidcategoria,
-          nombre:          fila.nombre,
+          id: fila.intidcategoria,
+          nombre: fila.nombre,
           prestamosPorMes: {}
         };
       }
@@ -115,21 +101,20 @@ async function getPrestamosPorMes(req, res) {
 
     const categorias = Object.values(categoriasMap)
       .map(cat => {
-        const prestamos = mesesDisponibles.map(mes => cat.prestamosPorMes[mes] || 0);
-        const modelo    = calcularModelo(prestamos);
-        const k         = modelo.k;
-        const C         = modelo.C;
-        const t0        = modelo.t0;
+        const prestamos      = mesesDisponibles.map(mes => cat.prestamosPorMes[mes] || 0);
+        const k              = calcularTasaK(prestamos);
+        const { C, t0 }      = calcularCyT0(prestamos);
+        const puntosConDatos = prestamos.filter(v => v > 0).length;
 
         return {
-          id:                 cat.id,
-          nombre:             cat.nombre,
-          prestamos:          prestamos,
-          tasa_k:             k,
-          C:                  C,
-          t0:                 t0,
+          id:                cat.id,
+          nombre:            cat.nombre,
+          prestamos:         prestamos,
+          tasa_k:            k,
+          C:                 C,
+          t0:                t0,
           porcentaje_mensual: parseFloat(((Math.exp(k) - 1) * 100).toFixed(1)),
-          datos_suficientes:  prestamos.filter(v => v > 0).length >= 2
+          datos_suficientes: puntosConDatos >= 2
         };
       })
       .sort((a, b) => b.tasa_k - a.tasa_k);
@@ -148,7 +133,7 @@ async function getPrestamosPorMes(req, res) {
     res.status(500).json({
       success: false,
       message: 'Error en reportes',
-      error:   error.message
+      error: error.message
     });
   }
 }
@@ -163,7 +148,7 @@ async function getEstadisticas(req, res) {
     res.status(500).json({
       success: false,
       message: 'Error al obtener estadísticas',
-      error:   error.message
+      error: error.message
     });
   }
 }
